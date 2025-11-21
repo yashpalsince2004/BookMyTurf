@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "1042481604836",
+    "project_id": "bookmyturf-bf932",
+    "storage_bucket": "bookmyturf-bf932.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1042481604836:android:af56f39ab9ebbce122a4f1",
+        "android_client_info": {
+          "package_name": "com.palindustries.bookmyturf"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1042481604836-i02o48kqnn6p0c1tkps00iv9sb1npvra.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDVE-yRYrR9LZZ5tQMS7g4LBtbIA03RvLw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1042481604836-hv5i9unsieg4qtdmkm97ov8jq17h4lfk.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "1042481604836-s8stessm588rktnhorpeaomaajr3dnji.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.palindustries.bookmyturf"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
