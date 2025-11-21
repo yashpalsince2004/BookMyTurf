@@ -1,3 +1,4 @@
+import 'package:bookmyturf/screens/main_wrapper.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'screens/home/home_screen.dart';
@@ -47,7 +48,8 @@ class MyApp extends StatelessWidget {
           ModalRoute.of(context)!.settings.arguments as String;
           return OtpScreen(verificationId: verificationId);
         },
-        '/home': (_) => const HomeScreen(),   // ← add this
+        '/home': (_) => MainWrapper(),
+
       },
 
       // Your initial screen
