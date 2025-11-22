@@ -3,6 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:bookmyturf/widgets/floating_nav_bar.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
+
+import '../city_picker_screen.dart';
+
+
 
 
 // ---------------------------------------------
@@ -49,11 +56,43 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
 
+  String? currentCity;
+
   @override
   void initState() {
     super.initState();
     _askLocationPermission();
+    _fetchLocation();
   }
+
+  Future<void> _fetchLocation() async {
+    // Check permission
+    LocationPermission permission = await Geolocator.checkPermission();
+
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+
+    if (permission == LocationPermission.deniedForever) return;
+
+    // Get position
+    Position position = await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high,
+    );
+
+    // Convert to address
+    List<Placemark> placemarks = await placemarkFromCoordinates(
+      position.latitude,
+      position.longitude,
+    );
+
+    // Extract city/state
+    final place = placemarks.first;
+    setState(() {
+      currentCity = "${place.locality}, ${place.administrativeArea}";
+    });
+  }
+
 
   int _selectedIndex = 0;
 
@@ -160,31 +199,62 @@ class _HomeScreenState extends State<HomeScreen> {
                 title: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.location_on, size: 16, color: Colors.greenAccent),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Kalyan, Maharashtra',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.white.withOpacity(0.8),
+                    GestureDetector(
+                      onTap: () async {
+                        final selectedCity = await Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const CityPickerScreen()),
+                        );
+
+                        if (selectedCity != null) {
+                          setState(() => currentCity = selectedCity);
+                        }
+                      },
+                      child: Row(
+                        children: [
+                          const Icon(Icons.location_on, size: 18, color: Colors.greenAccent),
+                          const SizedBox(width: 4),
+                          Text(
+                            currentCity ?? "Select Location",
+                            style: TextStyle(color: Colors.white, fontSize: 15),
                           ),
-                        ),
-                        const Icon(Icons.keyboard_arrow_down, size: 16, color: Colors.white54),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Hello, Yash 👋',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        letterSpacing: 0.5,
+                          const Icon(Icons.keyboard_arrow_down, color: Colors.white70),
+                        ],
                       ),
                     ),
+                    const SizedBox(height: 4),
+                    //_______________________________________________
+                    // 🔥 REPLACE THIS ↓
+                    // const Text('Hello, Yash 👋', ...)
+                    //_______________________________________________
+                    // ✅ WITH THIS ↓
+                    Builder(
+                      builder: (context) {
+                        final user = FirebaseAuth.instance.currentUser;
+
+                        // Extract name logic
+                        String name = "Player";
+
+                        if (user?.displayName != null && user!.displayName!.trim().isNotEmpty) {
+                          name = user.displayName!.split(" ").first; // get only first name
+                        } else if (user?.phoneNumber != null) {
+                          // Optional formatting for phone number login
+                          final raw = user!.phoneNumber!;
+                          name = "${raw.substring(0, 4)}•••${raw.substring(raw.length - 2)}";
+                        }
+
+                        return Text(
+                          "Hello, $name 👋",
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            letterSpacing: 0.5,
+                          ),
+                        );
+                      },
+                    ),
+
                   ],
                 ),
                 actions: [
