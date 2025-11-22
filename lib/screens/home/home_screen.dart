@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:bookmyturf/widgets/floating_nav_bar.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 
 // ---------------------------------------------
@@ -43,10 +44,20 @@ class HomeScreen extends StatefulWidget {
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
+
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+
+  @override
+  void initState() {
+    super.initState();
+    _askLocationPermission();
+  }
+
   int _selectedIndex = 0;
+
+
 
   final List<SportCategory> _categories = [
     SportCategory('Football', Icons.sports_soccer, Colors.greenAccent),
@@ -85,6 +96,26 @@ class _HomeScreenState extends State<HomeScreen> {
       distance: '5.0 km',
     ),
   ];
+  // ----------------------------------------------------
+  // LOCATION PERMISSION
+  // ----------------------------------------------------
+  Future<void> _askLocationPermission() async {
+    var status = await Permission.locationWhenInUse.status;
+
+    if (status.isDenied) {
+      status = await Permission.locationWhenInUse.request();
+    }
+
+    if (status.isPermanentlyDenied) {
+      // Show an alert ONLY if completely blocked
+      openAppSettings();
+    }
+    if (status.isGranted) {
+      // Ask for always only after user allows the first time
+      _askLocationPermission();
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {

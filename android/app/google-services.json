@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "1042481604836-lp0gkdodnilhccdlif7rjatpu8vfs6pq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.palindustries.bookmyturf",
+            "certificate_hash": "d15282710bddd2c760bded751c9ddd3440b7a389"
+          }
+        },
+        {
           "client_id": "1042481604836-i02o48kqnn6p0c1tkps00iv9sb1npvra.apps.googleusercontent.com",
           "client_type": 3
         }

@@ -2,7 +2,14 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>CADisableMinimumFrameDurationOnPhone</key>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>We need your location to show nearby turfs.</string>
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>We use location to recommend the closest sports venues.</string>
+    <key>NSLocationAlwaysUsageDescription</key>
+    <string>Your location is used to improve turf suggestions and booking precision.</string>
+
+    <key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
