@@ -610,8 +610,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                           context,
                                           MaterialPageRoute(
                                             builder: (context) => SlotBookingScreen(
+                                              turfId: venue.id,
                                               turfName: venue.name,
-                                              turfId: venue.id,   // 🔥 Make sure you pass ID for Firestore
+                                              turfImage: venue.imageUrl,
                                             ),
                                           ),
                                         );
@@ -622,11 +623,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                         foregroundColor: Colors.greenAccent,
                                         padding: const EdgeInsets.symmetric(vertical: 12),
                                       ),
-                                      child: const Text(
-                                        'View Slots',
-                                        style: TextStyle(fontWeight: FontWeight.bold),
-                                      ),
-                                    ),
+                                      child: const Text('View Slots', style: TextStyle(fontWeight: FontWeight.bold)),
+                                    )
                                   ),
                                 ],
                               ),

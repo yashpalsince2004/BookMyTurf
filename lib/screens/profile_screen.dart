@@ -1,8 +1,10 @@
 import 'dart:ui';
+import 'package:bookmyturf/screens/home/booking_history_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'account_settings_screen.dart';
+import 'home/likes_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -202,8 +204,19 @@ class ProfileScreen extends StatelessWidget {
         }),
 
         _menuTile(Icons.payment, "Payment Methods"),
-        _menuTile(Icons.calendar_month, "My Bookings"),
-        _menuTile(Icons.favorite, "Saved Turfs"),
+
+        _menuTile(Icons.calendar_month, "My Bookings", onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const BookingHistoryScreen()),
+          );
+        }),
+        _menuTile(Icons.favorite, "Saved Turfs", onTap: () {
+           Navigator.push(
+             context,
+             MaterialPageRoute(builder: (_) => const LikesScreen()),
+          );
+        }),
         _menuTile(Icons.notifications, "Notifications"),
         _menuTile(Icons.support_agent, "Help & Support"),
         _menuTile(Icons.info_outline, "About App"),

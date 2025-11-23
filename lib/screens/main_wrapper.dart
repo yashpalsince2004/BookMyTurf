@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:bookmyturf/widgets/floating_nav_bar.dart';
 import 'package:bookmyturf/screens/home/home_screen.dart';
-import 'package:bookmyturf/screens/home/calendar_screen.dart';
+import 'package:bookmyturf/screens/home/booking_history_screen.dart';
 import 'package:bookmyturf/screens/home/likes_screen.dart';
 import 'profile_screen.dart';
 
@@ -17,7 +17,8 @@ class _MainWrapperState extends State<MainWrapper> {
 
   final List<Widget> _pages = const [
     HomeScreen(),
-    CalendarScreen(),
+    // CalendarScreen(),
+    BookingHistoryScreen(),
     LikesScreen(),
     ProfileScreen(),
   ];

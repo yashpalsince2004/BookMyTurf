@@ -68,6 +68,10 @@ dependencies:
 #  vibration: ^1.9.0
 #  flutter_haptic: ^2.0.3
 
+# Calander
+  table_calendar: ^3.0.9
+
+
 
 
 

@@ -1,3 +1,4 @@
+import 'package:bookmyturf/screens/home/booking_history_screen.dart';
 import 'package:bookmyturf/screens/main_wrapper.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -43,13 +44,14 @@ class MyApp extends StatelessWidget {
       routes: {
         '/login': (_) => const LoginScreen(),
         '/phoneLogin': (_) => const PhoneLoginScreen(),
+        "/bookingHistory": (context) => const BookingHistoryScreen(),
+        '/home': (_) => MainWrapper(),
+
         '/otp': (context) {
           final verificationId =
           ModalRoute.of(context)!.settings.arguments as String;
           return OtpScreen(verificationId: verificationId);
         },
-        '/home': (_) => MainWrapper(),
-
       },
 
       // Your initial screen
