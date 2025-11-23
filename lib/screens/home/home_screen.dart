@@ -8,6 +8,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 
 import '../city_picker_screen.dart';
+import '../slot_booking_screen.dart';
 
 
 
@@ -604,14 +605,27 @@ class _HomeScreenState extends State<HomeScreen> {
                                   SizedBox(
                                     width: double.infinity,
                                     child: OutlinedButton(
-                                      onPressed: () {},
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) => SlotBookingScreen(
+                                              turfName: venue.name,
+                                              turfId: venue.id,   // 🔥 Make sure you pass ID for Firestore
+                                            ),
+                                          ),
+                                        );
+                                      },
                                       style: OutlinedButton.styleFrom(
                                         side: const BorderSide(color: Colors.greenAccent),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                         foregroundColor: Colors.greenAccent,
                                         padding: const EdgeInsets.symmetric(vertical: 12),
                                       ),
-                                      child: const Text('View Slots', style: TextStyle(fontWeight: FontWeight.bold)),
+                                      child: const Text(
+                                        'View Slots',
+                                        style: TextStyle(fontWeight: FontWeight.bold),
+                                      ),
                                     ),
                                   ),
                                 ],
