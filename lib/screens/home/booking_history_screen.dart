@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import 'booking_details_screen.dart';
+
 class BookingHistoryScreen extends StatelessWidget {
   const BookingHistoryScreen({super.key});
 
@@ -57,7 +59,9 @@ class BookingHistoryScreen extends StatelessWidget {
               final price = data["price"] ?? 0;
               final date = data["date"];
               final status = data["status"] ?? "confirmed";
-              final turfImage = data["imageUrl"] ?? "https://i.ibb.co/vJkFq7k/no-image.jpg";
+              final turfImage = data["turfImage"] ?? "https://i.ibb.co/vJkFq7k/no-image.jpg";
+
+
 
               final formattedDate = DateFormat("dd MMM yyyy").format(DateTime.parse(date));
 
@@ -103,7 +107,18 @@ class BookingHistoryScreen extends StatelessWidget {
                             _buildStatusChip(status),
                             const SizedBox(height: 8),
                             InkWell(
-                              onTap: () {},
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => BookingDetailsScreen(
+                                      bookingData: data,
+                                      bookingId: bookings[index].id,
+                                    ),
+                                  ),
+                                );
+                              },
+
                               child: const Text(
                                 "More detail",
                                 style: TextStyle(

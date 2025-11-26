@@ -74,7 +74,6 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
 
   // --- 🔥 CORE FIRESTORE LISTENER ---
   void _listenToBookings() {
-    // Format date to match database format: "yyyy-MM-dd"
     String dateKey = DateFormat('yyyy-MM-dd').format(_selectedDate);
 
     FirebaseFirestore.instance
@@ -84,23 +83,31 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
         .snapshots()
         .listen((snapshot) {
 
-      // Get list of booked time strings
-      final bookedTimes = snapshot.docs.map((doc) => doc["slot"].toString()).toList();
+      final bookedTimes = snapshot.docs
+          .where((doc) => doc["status"] != "cancelled")
+          .map((doc) => doc["slot"].toString())
+          .toList();
 
       setState(() {
+        final toRemove = <String>[];
+
         for (var slot in allSlots) {
-          // If the slot string exists in DB, mark as Unavailable
           slot.isAvailable = !bookedTimes.contains(slot.time);
 
-          // If a user had this selected, but it just got booked by someone else, deselect it
           if (!slot.isAvailable && selectedSlots.contains(slot.time)) {
-            selectedSlots.remove(slot.time);
+            toRemove.add(slot.time);
           }
         }
+
+        // SAFE removal
+        selectedSlots.removeWhere((s) => toRemove.contains(s));
+
         _filterSlots();
       });
     });
   }
+
+
 
   void _filterSlots() {
     setState(() {
@@ -125,57 +132,79 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
     String minute = time.minute.toString().padLeft(2, '0');
     return "$hour:$minute $period";
   }
-
+  // _______________________________________
   // --- 🔥 CORE BOOKING LOGIC ---
+  //_________________________________________
   Future<void> _bookSlots() async {
     if (selectedSlots.isEmpty) return;
 
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      // Not logged in — show message and return
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please sign in to book slots.")),
+      );
+      return;
+    }
+
     // Show Loading
-    showDialog(context: context, builder: (c) => const Center(child: CircularProgressIndicator()));
+    showDialog(context: context, barrierDismissible: false, builder: (c) => const Center(child: CircularProgressIndicator()));
 
     String dateKey = DateFormat('yyyy-MM-dd').format(_selectedDate);
     final firestore = FirebaseFirestore.instance;
     final batch = firestore.batch();
 
     try {
-      // Create a list of operations
-      for (String slotTime in selectedSlots) {
-        // 1. Create a UNIQUE ID for this booking: "turfId_date_time"
-        // This prevents double booking automatically.
+      final List<String> slotsToBook = List.from(selectedSlots);
+
+      for (String slotTime in slotsToBook) {
         String docId = "${widget.turfId}_${dateKey}_${slotTime.replaceAll(' ', '')}";
 
-        DocumentReference docRef = firestore.collection("bookings").doc(docId);
+        DocumentReference docRef =
+        FirebaseFirestore.instance.collection("bookings").doc(docId);
 
-        // 2. Check if it exists before writing (Optional check, but good for UX)
-        final docSnap = await docRef.get();
-        if (docSnap.exists) {
-          throw Exception("Slot $slotTime is already booked!");
+        final snap = await docRef.get();
+
+        if (snap.exists) {
+          final data = snap.data() as Map<String, dynamic>;
+          final status = data["status"] ?? "confirmed";
+
+          // If it's cancelled, treat slot as FREE
+          if (status != "cancelled") {
+            throw Exception("Slot $slotTime is already booked!");
+          }
         }
 
-        // 3. Add to batch
+
         batch.set(docRef, {
           "turfId": widget.turfId,
           "turfName": widget.turfName,
+          "turfImage": widget.turfImage,
           "slot": slotTime,
           "date": dateKey,
           "price": _slotPrice,
-          "userId": FirebaseAuth.instance.currentUser!.uid,
+          "userId": currentUser.uid,
+          "userName": currentUser.displayName ?? currentUser.phoneNumber ?? "Player",
           "timestamp": FieldValue.serverTimestamp(),
-          "status": "confirmed"
-        });
+          "status": "confirmed",
+        },
+        SetOptions(merge: true));
       }
 
-      // 4. Commit all bookings at once
-      await batch.commit();
+// Only after loop completes
+      selectedSlots.clear();
+
+
+      // commit only if there is something to write
+      if (batch.commit != null) {
+        await batch.commit();
+      }
 
       if (!mounted) return;
-      Navigator.pop(context); // Remove loader
+      Navigator.pop(context); // remove loader
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Booking Confirmed!"),
-          backgroundColor: Colors.green,
-        ),
+        const SnackBar(content: Text("Booking Confirmed!"), backgroundColor: Colors.green),
       );
 
       setState(() {
@@ -184,16 +213,14 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
 
     } catch (e) {
       if (!mounted) return;
-      Navigator.pop(context); // Remove loader
+      Navigator.pop(context); // remove loader
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Booking Failed: ${e.toString().replaceAll('Exception:', '')}"),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text("Booking Failed: ${e.toString()}"), backgroundColor: Colors.red),
       );
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
