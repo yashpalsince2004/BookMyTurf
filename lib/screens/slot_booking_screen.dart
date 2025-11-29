@@ -35,6 +35,7 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
   final int _slotPrice = 600;
 
   final List<String> _sections = ["Morning", "Afternoon", "Evening"];
+
   String _selectedSection = "Morning";
 
   @override
@@ -191,7 +192,7 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
         SetOptions(merge: true));
       }
 
-// Only after loop completes
+      // Only after loop completes
       selectedSlots.clear();
 
 
@@ -297,27 +298,80 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
           const SizedBox(height: 10),
 
           // Section Dropdown
+          // 🔁 REPLACE YOUR CURRENT "Section Dropdown" BLOCK WITH THIS
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: DropdownButtonHideUnderline(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey.shade300)),
-                child: DropdownButton<String>(
-                  isExpanded: true,
-                  value: _selectedSection,
-                  items: _sections.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                  onChanged: (value) {
-                    setState(() => _selectedSection = value!);
-                    _filterSlots();
-                  },
-                ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: _sections.map((section) {
+                  final bool isSelected = _selectedSection == section;
+
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedSection = section;
+                        _filterSlots();
+                      });
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeInOut,
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      padding: EdgeInsets.symmetric(
+                        vertical: 10,
+                        // ⭐ length-wise stretch: more horizontal padding when selected
+                        horizontal: isSelected ? 28 : 14,
+                      ),
+                      constraints: BoxConstraints(
+                        // ⭐ also change minWidth so selected pill is visibly longer
+                        minWidth: isSelected ? 110 : 80,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isSelected ? const Color(0xFF34A853) : const Color(0xFFF7F4FF),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSelected ? const Color(0xFF34A853) : const Color(0xFFE1D9FF),
+                          width: isSelected ? 2 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (isSelected)
+                            const Icon(Icons.check, size: 16, color: Colors.white),
+                          if (isSelected) const SizedBox(width: 6),
+                          Text(
+                            section,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                              color: isSelected ? Colors.white : Colors.black87,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
               ),
             ),
           ),
+
+
 
           const Padding(
             padding: EdgeInsets.only(left: 16, top: 16, bottom: 8),
