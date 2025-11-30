@@ -3,8 +3,8 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:lottie/lottie.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
-import 'package:sensors_plus/sensors_plus.dart';
 import 'dart:async';
 
 class LoginScreen extends StatefulWidget {
@@ -15,75 +15,64 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
+
   // Logic
   String? _loadingProvider;
-  StreamSubscription? _gyroStream;
 
-  // Parallax smooth values
-  double _offsetX = 0;
-  double _offsetY = 0;
-  double smoothX = 0;
-  double smoothY = 0;
+  // Animation States
+  bool _showLoadingOverlay = false;
+  bool _isAnimatingOut = false;
 
-  // Animation
-  late AnimationController _animController;
+  // Controllers
+  late AnimationController _entranceController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
+  late AnimationController _lottieController;
 
   @override
   void initState() {
     super.initState();
+    _preCacheAssets(); // <--- PRE-CACHE ASSETS
 
-    // --------- Smooth Parallax Setup ----------
-    const double smoothFactor = 0.05; // lower = smoother
+    _lottieController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    );
 
-    _gyroStream = gyroscopeEvents.listen((GyroscopeEvent e) {
-      if (!mounted) return;
-
-      double targetX = (e.y * 8).clamp(-20.0, 20.0);
-      double targetY = (e.x * 8).clamp(-20.0, 20.0);
-
-      // Low-pass filtering
-      smoothX = smoothX + (targetX - smoothX) * smoothFactor;
-      smoothY = smoothY + (targetY - smoothY) * smoothFactor;
-
-      setState(() {
-        _offsetX = smoothX;
-        _offsetY = smoothY;
-      });
-    });
-
-    // --------- Entrance Animations ----------
-    _animController = AnimationController(
+    _entranceController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     );
 
+    // Smoother Curve (EaseOutBack makes it settle nicely)
     _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.15),
+      begin: const Offset(0, 0.2),
       end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _animController,
-        curve: Curves.easeOutQuart,
-      ),
-    );
+    ).animate(CurvedAnimation(
+      parent: _entranceController,
+      curve: Curves.easeOutQuart,
+    ));
 
-    _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(
-        parent: _animController,
-        curve: const Interval(0.2, 1.0, curve: Curves.easeOut),
-      ),
-    );
+    _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(CurvedAnimation(
+      parent: _entranceController,
+      curve: const Interval(0.2, 1.0, curve: Curves.easeOut),
+    ));
 
-    _animController.forward();
+    _entranceController.forward();
+  }
+
+  // Helper to ensure assets are ready (Prevents first-frame jank)
+  void _preCacheAssets() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      precacheImage(const AssetImage("assets/images/turf_bg.png"), context);
+    });
   }
 
   @override
   void dispose() {
-    _gyroStream?.cancel();
-    _animController.dispose();
+    _entranceController.dispose();
+    _lottieController.dispose();
     super.dispose();
   }
 
@@ -92,42 +81,80 @@ class _LoginScreenState extends State<LoginScreen>
   // ------------------------------------
 
   Future<void> _handleGoogleSignIn() async {
-    setState(() => _loadingProvider = 'google');
+    setState(() {
+      _isAnimatingOut = true;
+      _loadingProvider = 'google';
+    });
+
+    await Future.delayed(const Duration(milliseconds: 500)); // Slightly faster
+
+    if (!mounted) return;
+    setState(() => _showLoadingOverlay = true);
+
+    _lottieController.reset();
+    final animationFuture = _lottieController.forward();
+
     try {
-      final result = await signInWithGoogle();
-      if (result != null && mounted) {
+      final loginResult = await signInWithGoogle();
+
+      if (loginResult != null && mounted) {
+        await animationFuture;
         Navigator.pushReplacementNamed(context, "/home");
+      } else {
+        _resetUI();
       }
     } catch (e) {
-      _showSnackBar("Google Login failed. Please try again.", isError: true);
-    } finally {
-      if (mounted) setState(() => _loadingProvider = null);
+      debugPrint("Error: $e");
+      if (mounted) _showSnackBar("Google Login failed.", isError: true);
+      _resetUI();
     }
   }
 
   Future<void> _handleAppleSignIn() async {
-    setState(() => _loadingProvider = 'apple');
+    setState(() {
+      _isAnimatingOut = true;
+      _loadingProvider = 'apple';
+    });
+
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    if (!mounted) return;
+    setState(() => _showLoadingOverlay = true);
+
+    _lottieController.reset();
+    final animationFuture = _lottieController.forward();
+
     try {
-      final result = await signInWithApple();
-      if (result != null && mounted) {
+      final loginResult = await signInWithApple();
+      if (loginResult != null && mounted) {
+        await animationFuture;
         Navigator.pushReplacementNamed(context, "/home");
+      } else {
+        _resetUI();
       }
     } catch (e) {
-      _showSnackBar("Apple Login failed.", isError: true);
-    } finally {
-      if (mounted) setState(() => _loadingProvider = null);
+      if (mounted) _showSnackBar("Apple Login failed.", isError: true);
+      _resetUI();
     }
+  }
+
+  void _resetUI() {
+    if (!mounted) return;
+    _lottieController.stop();
+    _lottieController.reset();
+    setState(() {
+      _isAnimatingOut = false;
+      _showLoadingOverlay = false;
+      _loadingProvider = null;
+    });
   }
 
   void _showSnackBar(String message, {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor:
-        isError ? Colors.redAccent.withOpacity(0.8) : Colors.green,
+        backgroundColor: isError ? Colors.redAccent : Colors.green,
         behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
   }
@@ -141,24 +168,24 @@ class _LoginScreenState extends State<LoginScreen>
     return Scaffold(
       extendBody: true,
       resizeToAvoidBottomInset: false,
+      backgroundColor: Colors.black, // Fallback color
       body: Stack(
         children: [
           // -------------------------------------------
-          // SMOOTH PARALLAX + ZOOM BACKGROUND
+          // 1. BACKGROUND WITH ZOOM EFFECT
           // -------------------------------------------
           Positioned.fill(
-            child: Transform.scale(
-              scale: 1.06, // zoom effect
-              child: Transform.translate(
-                offset: Offset(_offsetX, _offsetY),
-                child: Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.black,
-                    image: DecorationImage(
-                      image: AssetImage("assets/images/turf_bg.png"),
-                      fit: BoxFit.cover,
-                      opacity: 0.8,
-                    ),
+            child: AnimatedScale(
+              // Zoom in slightly when loading starts
+              scale: _isAnimatingOut ? 1.1 : 1.0,
+              duration: const Duration(milliseconds: 1500),
+              curve: Curves.easeInOut,
+              child: Container(
+                decoration: const BoxDecoration(
+                  image: DecorationImage(
+                    image: AssetImage("assets/images/turf_bg.png"),
+                    fit: BoxFit.cover,
+                    opacity: 0.8,
                   ),
                 ),
               ),
@@ -166,17 +193,58 @@ class _LoginScreenState extends State<LoginScreen>
           ),
 
           // -------------------------------------------
-          // GLASS CONTENT
+          // 2. GLASS PANEL
           // -------------------------------------------
           Center(
             child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: FadeTransition(
                 opacity: _fadeAnimation,
                 child: SlideTransition(
                   position: _slideAnimation,
-                  child: _buildGlassPanel(context),
+                  child: AnimatedSlide(
+                    offset: _isAnimatingOut ? const Offset(0, 1.5) : Offset.zero,
+                    duration: const Duration(milliseconds: 600),
+                    curve: Curves.easeInOutCubic, // Very smooth curve
+                    child: _buildGlassPanel(context),
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // -------------------------------------------
+          // 3. LOADING OVERLAY
+          // -------------------------------------------
+          Positioned.fill(
+            child: IgnorePointer(
+              ignoring: !_showLoadingOverlay,
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 600),
+                opacity: _showLoadingOverlay ? 1.0 : 0.0,
+                curve: Curves.easeInOut,
+                child: Container(
+                  // Using a slight blur here adds a very premium feel
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.6),
+                  ),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                    child: Center(
+                      child: Lottie.asset(
+                        "assets/lottie/login_loading.json",
+                        controller: _lottieController,
+                        frameRate: FrameRate.max,
+                        width: 280,
+                        height: 280,
+                        fit: BoxFit.contain,
+                        repeat: false,
+                        onLoaded: (composition) {
+                          _lottieController.duration = composition.duration;
+                        },
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -185,35 +253,62 @@ class _LoginScreenState extends State<LoginScreen>
       ),
     );
   }
+// ==========================================
+// PASTE THIS AT THE VERY BOTTOM OF THE FILE
+// (Outside of any class brackets)
+// ==========================================
 
+  Future<UserCredential?> signInWithGoogle() async {
+    try {
+      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+      if (googleUser == null) return null; // User cancelled
+
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final OAuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      return await FirebaseAuth.instance.signInWithCredential(credential);
+    } catch (e) {
+      debugPrint("Google Sign In Error: $e");
+      rethrow;
+    }
+  }
+
+  Future<UserCredential?> signInWithApple() async {
+    try {
+      final appleCredential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
+
+      final OAuthCredential credential = OAuthProvider("apple.com").credential(
+        idToken: appleCredential.identityToken,
+        accessToken: appleCredential.authorizationCode,
+      );
+
+      return await FirebaseAuth.instance.signInWithCredential(credential);
+    } catch (e) {
+      debugPrint("Apple Sign In Error: $e");
+      rethrow;
+    }
+  }
   Widget _buildGlassPanel(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(30),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20), // Higher blur for premium look
         child: Container(
           width: double.infinity,
           constraints: const BoxConstraints(maxWidth: 400),
           padding: const EdgeInsets.fromLTRB(24, 40, 24, 32),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.1),
+            color: Colors.white.withOpacity(0.08), // More subtle
             borderRadius: BorderRadius.circular(30),
-            border: Border.all(color: Colors.white.withOpacity(0.2), width: 1.5),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.white.withOpacity(0.2),
-                Colors.white.withOpacity(0.05),
-              ],
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.25),
-                blurRadius: 25,
-                spreadRadius: 5,
-              ),
-            ],
+            border: Border.all(color: Colors.white.withOpacity(0.15), width: 1.5),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -225,13 +320,6 @@ class _LoginScreenState extends State<LoginScreen>
                   fontWeight: FontWeight.bold,
                   color: Colors.white.withOpacity(0.95),
                   letterSpacing: 0.5,
-                  shadows: [
-                    Shadow(
-                      offset: const Offset(0, 2),
-                      blurRadius: 10,
-                      color: Colors.black.withOpacity(0.3),
-                    )
-                  ],
                 ),
               ),
               const SizedBox(height: 8),
@@ -246,51 +334,50 @@ class _LoginScreenState extends State<LoginScreen>
 
               const SizedBox(height: 40),
 
-              _buildAuthButton(
-                id: 'google',
-                label: "Continue with Google",
-                icon: Icons.g_mobiledata_rounded,
+              // USES CUSTOM BOUNCY BUTTON
+              BouncyButton(
                 onTap: _handleGoogleSignIn,
-                color: Colors.white.withOpacity(0.15),
+                child: _buildAuthButtonContent(
+                  label: "Continue with Google",
+                  icon: Icons.g_mobiledata_rounded,
+                  color: Colors.white.withOpacity(0.15),
+                ),
               ),
 
               const SizedBox(height: 16),
 
               if (Platform.isIOS) ...[
-                _buildAuthButton(
-                  id: 'apple',
-                  label: "Continue with Apple",
-                  icon: Icons.apple,
+                BouncyButton(
                   onTap: _handleAppleSignIn,
-                  color: Colors.black.withOpacity(0.3),
+                  child: _buildAuthButtonContent(
+                    label: "Continue with Apple",
+                    icon: Icons.apple,
+                    color: Colors.black.withOpacity(0.4),
+                  ),
                 ),
                 const SizedBox(height: 16),
               ],
 
-              _buildAuthButton(
-                id: 'phone',
-                label: "Login with Phone",
-                icon: Icons.phone_iphone_rounded,
+              BouncyButton(
                 onTap: () => Navigator.pushNamed(context, "/phoneLogin"),
-                color: Colors.white.withOpacity(0.15),
+                child: _buildAuthButtonContent(
+                  label: "Login with Phone",
+                  icon: Icons.phone_iphone_rounded,
+                  color: Colors.white.withOpacity(0.15),
+                ),
               ),
 
               const SizedBox(height: 32),
 
               GestureDetector(
                 onTap: () => Navigator.pushReplacementNamed(context, "/home"),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                  color: Colors.transparent,
-                  child: Text(
-                    "Skip for now →",
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.white.withOpacity(0.8),
-                      decoration: TextDecoration.underline,
-                      decorationColor: Colors.white.withOpacity(0.5),
-                    ),
+                child: Text(
+                  "Skip for now →",
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.white.withOpacity(0.8),
+                    decoration: TextDecoration.underline,
+                    decorationColor: Colors.white.withOpacity(0.5),
                   ),
                 ),
               ),
@@ -301,103 +388,103 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  // ------------------------------------
-  //   AUTH BUTTON (GLASS STYLE)
-  // ------------------------------------
-
-  Widget _buildAuthButton({
-    required String id,
+  // Refactored button content to use inside BouncyButton
+  Widget _buildAuthButtonContent({
     required String label,
     required IconData icon,
-    required VoidCallback onTap,
     required Color color,
   }) {
-    final bool isLoading = _loadingProvider == id;
-    final bool isAnyLoading = _loadingProvider != null;
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          height: 54,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.white.withOpacity(0.25)),
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: isAnyLoading ? null : onTap,
-              splashColor: Colors.white.withOpacity(0.1),
-              highlightColor: Colors.white.withOpacity(0.05),
-              child: Center(
-                child: isLoading
-                    ? const SizedBox(
-                  height: 22,
-                  width: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    color: Colors.white,
-                  ),
-                )
-                    : Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(icon, color: Colors.white, size: 24),
-                    const SizedBox(width: 12),
-                    Text(
-                      label,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                  ],
-                ),
+    return Container(
+      height: 54,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withOpacity(0.25)),
+      ),
+      child: Center(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: Colors.white, size: 24),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.3,
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
 }
 
-// =======================================================================
-//        AUTH HELPERS
-// =======================================================================
+// -------------------------------------------
+// 4. NEW: BOUNCY BUTTON WIDGET
+// -------------------------------------------
+class BouncyButton extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onTap;
 
-Future<UserCredential?> signInWithGoogle() async {
-  final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
-  if (googleUser == null) return null;
+  const BouncyButton({
+    super.key,
+    required this.child,
+    required this.onTap
+  });
 
-  final GoogleSignInAuthentication googleAuth =
-  await googleUser.authentication;
-
-  final OAuthCredential credential = GoogleAuthProvider.credential(
-    accessToken: googleAuth.accessToken,
-    idToken: googleAuth.idToken,
-  );
-
-  return FirebaseAuth.instance.signInWithCredential(credential);
+  @override
+  State<BouncyButton> createState() => _BouncyButtonState();
 }
 
-Future<UserCredential?> signInWithApple() async {
-  final appleCredential = await SignInWithApple.getAppleIDCredential(
-    scopes: [
-      AppleIDAuthorizationScopes.email,
-      AppleIDAuthorizationScopes.fullName,
-    ],
-  );
+class _BouncyButtonState extends State<BouncyButton> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
 
-  final OAuthCredential credential = OAuthProvider("apple.com").credential(
-    idToken: appleCredential.identityToken,
-    accessToken: appleCredential.authorizationCode,
-  );
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100), // Fast bounce
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
 
-  return FirebaseAuth.instance.signInWithCredential(credential);
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onTapDown(TapDownDetails details) {
+    _controller.forward();
+  }
+
+  void _onTapUp(TapUpDetails details) {
+    _controller.reverse();
+    widget.onTap();
+  }
+
+  void _onTapCancel() {
+    _controller.reverse();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: _onTapDown,
+      onTapUp: _onTapUp,
+      onTapCancel: _onTapCancel,
+      child: ScaleTransition(
+        scale: _scaleAnimation,
+        child: widget.child,
+      ),
+    );
+  }
 }

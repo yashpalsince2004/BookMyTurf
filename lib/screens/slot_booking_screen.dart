@@ -300,65 +300,45 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
           // Section Dropdown
           // 🔁 REPLACE YOUR CURRENT "Section Dropdown" BLOCK WITH THIS
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: _sections.map((section) {
-                  final bool isSelected = _selectedSection == section;
+                  final bool isSelected = section == _selectedSection;
 
-                  return GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _selectedSection = section;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOut,
+                    margin: const EdgeInsets.only(right: 12),
+                    padding: EdgeInsets.symmetric(
+                      vertical: 14,
+                      horizontal: isSelected ? 26 : 18, // stretch effect
+                    ),
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.green : Colors.white,
+                      borderRadius: BorderRadius.circular(30),
+                      border: Border.all(
+                        color: isSelected ? Colors.green : Colors.grey.shade300,
+                      ),
+                    ),
+                    child: InkWell(
+                      onTap: () {
+                        setState(() => _selectedSection = section);
                         _filterSlots();
-                      });
-                    },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 220),
-                      curve: Curves.easeInOut,
-                      margin: const EdgeInsets.symmetric(horizontal: 4),
-                      padding: EdgeInsets.symmetric(
-                        vertical: 10,
-                        // ⭐ length-wise stretch: more horizontal padding when selected
-                        horizontal: isSelected ? 28 : 14,
-                      ),
-                      constraints: BoxConstraints(
-                        // ⭐ also change minWidth so selected pill is visibly longer
-                        minWidth: isSelected ? 110 : 80,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isSelected ? const Color(0xFF34A853) : const Color(0xFFF7F4FF),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isSelected ? const Color(0xFF34A853) : const Color(0xFFE1D9FF),
-                          width: isSelected ? 2 : 1,
-                        ),
-                      ),
+                      },
+                      borderRadius: BorderRadius.circular(30),
                       child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           if (isSelected)
-                            const Icon(Icons.check, size: 16, color: Colors.white),
+                            const Icon(Icons.check, color: Colors.white, size: 18),
                           if (isSelected) const SizedBox(width: 6),
                           Text(
                             section,
                             style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
                               color: isSelected ? Colors.white : Colors.black87,
                             ),
                           ),
@@ -370,6 +350,7 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
               ),
             ),
           ),
+
 
 
 

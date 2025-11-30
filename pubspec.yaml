@@ -33,6 +33,7 @@ dependencies:
 
   permission_handler: ^11.4.0
   cupertino_icons: ^1.0.8
+  cached_network_image: ^3.3.1
 
 #  # Firebase packages MUST be here
 #  firebase_core: ^4.2.1
@@ -49,6 +50,7 @@ dependencies:
   firebase_storage: ^13.0.4
   google_sign_in: ^6.2.1
   sign_in_with_apple: ^7.0.1
+
 
 
 
@@ -77,6 +79,8 @@ dependencies:
 
 
 
+
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -87,6 +91,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
+
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -104,6 +109,7 @@ flutter:
     - assets/images/turf_bg.png
     - assets/images/default_user.png
     - assets/images/loc_bg.png
+    - assets/lottie/login_loading.json
 
   # To add assets to your application, add an assets section, like this:
   # assets:

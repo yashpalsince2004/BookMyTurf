@@ -1,17 +1,14 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:bookmyturf/widgets/floating_nav_bar.dart';
+import 'package:bookmyturf/widgets/floating_nav_bar.dart'; // Ensure this path is correct
 import 'package:permission_handler/permission_handler.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 
-import '../city_picker_screen.dart';
-import '../slot_booking_screen.dart';
-
-
-
+import '../city_picker_screen.dart'; // Ensure path is correct
+import '../slot_booking_screen.dart'; // Ensure path is correct
 
 // ---------------------------------------------
 // MODELS
@@ -52,12 +49,11 @@ class HomeScreen extends StatefulWidget {
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
-
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-
   String? currentCity;
+  int _selectedIndex = 0;
 
   @override
   void initState() {
@@ -67,37 +63,30 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _fetchLocation() async {
-    // Check permission
     LocationPermission permission = await Geolocator.checkPermission();
-
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
-
     if (permission == LocationPermission.deniedForever) return;
 
-    // Get position
     Position position = await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.high,
     );
 
-    // Convert to address
     List<Placemark> placemarks = await placemarkFromCoordinates(
       position.latitude,
       position.longitude,
     );
 
-    // Extract city/state
-    final place = placemarks.first;
-    setState(() {
-      currentCity = "${place.locality}, ${place.administrativeArea}";
-    });
+    if (placemarks.isNotEmpty) {
+      final place = placemarks.first;
+      if (mounted) {
+        setState(() {
+          currentCity = "${place.locality}, ${place.administrativeArea}";
+        });
+      }
+    }
   }
-
-
-  int _selectedIndex = 0;
-
-
 
   final List<SportCategory> _categories = [
     SportCategory('Football', Icons.sports_soccer, Colors.greenAccent),
@@ -136,31 +125,22 @@ class _HomeScreenState extends State<HomeScreen> {
       distance: '5.0 km',
     ),
   ];
-  // ----------------------------------------------------
-  // LOCATION PERMISSION
-  // ----------------------------------------------------
+
   Future<void> _askLocationPermission() async {
     var status = await Permission.locationWhenInUse.status;
-
     if (status.isDenied) {
       status = await Permission.locationWhenInUse.request();
     }
-
     if (status.isPermanentlyDenied) {
-      // Show an alert ONLY if completely blocked
       openAppSettings();
     }
-    if (status.isGranted) {
-      // Ask for always only after user allows the first time
-      _askLocationPermission();
-    }
   }
-
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       extendBody: true,
+      backgroundColor: Colors.black, // Fallback color
       body: Stack(
         children: [
           // 1. BACKGROUND
@@ -180,6 +160,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
           // 2. SCROLLABLE CONTENT
           CustomScrollView(
+            // PERFORMANCE: Pre-load content 800px ahead to prevent jank
+            cacheExtent: 800,
             physics: const BouncingScrollPhysics(),
             slivers: [
               // --- Glass App Bar ---
@@ -189,6 +171,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 toolbarHeight: 90,
                 backgroundColor: Colors.transparent,
                 elevation: 0,
+                // Keep blur here, it's static
                 flexibleSpace: ClipRRect(
                   child: BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
@@ -206,44 +189,44 @@ class _HomeScreenState extends State<HomeScreen> {
                           context,
                           MaterialPageRoute(builder: (context) => const CityPickerScreen()),
                         );
-
                         if (selectedCity != null) {
                           setState(() => currentCity = selectedCity);
                         }
                       },
                       child: Row(
+                        mainAxisSize: MainAxisSize.min, // Keep items packed
                         children: [
                           const Icon(Icons.location_on, size: 18, color: Colors.greenAccent),
                           const SizedBox(width: 4),
-                          Text(
-                            currentCity ?? "Select Location",
-                            style: TextStyle(color: Colors.white, fontSize: 15),
+                          // --- FIX START: Wrapped in Flexible ---
+                          Flexible(
+                            child: Text(
+                              currentCity ?? "Select Location",
+                              style: const TextStyle(color: Colors.white, fontSize: 15),
+                              overflow: TextOverflow.ellipsis, // Add dots if too long
+                              maxLines: 1,
+                            ),
                           ),
+                          // --- FIX END ---
                           const Icon(Icons.keyboard_arrow_down, color: Colors.white70),
                         ],
                       ),
                     ),
                     const SizedBox(height: 4),
-                    //_______________________________________________
-                    // 🔥 REPLACE THIS ↓
-                    // const Text('Hello, Yash 👋', ...)
-                    //_______________________________________________
-                    // ✅ WITH THIS ↓
                     Builder(
                       builder: (context) {
                         final user = FirebaseAuth.instance.currentUser;
-
-                        // Extract name logic
                         String name = "Player";
-
                         if (user?.displayName != null && user!.displayName!.trim().isNotEmpty) {
-                          name = user.displayName!.split(" ").first; // get only first name
+                          name = user.displayName!.split(" ").first;
                         } else if (user?.phoneNumber != null) {
-                          // Optional formatting for phone number login
                           final raw = user!.phoneNumber!;
-                          name = "${raw.substring(0, 4)}•••${raw.substring(raw.length - 2)}";
+                          if (raw.length > 4) {
+                            name = "${raw.substring(0, 4)}•••${raw.substring(raw.length - 2)}";
+                          } else {
+                            name = raw;
+                          }
                         }
-
                         return Text(
                           "Hello, $name 👋",
                           style: const TextStyle(
@@ -252,10 +235,11 @@ class _HomeScreenState extends State<HomeScreen> {
                             color: Colors.white,
                             letterSpacing: 0.5,
                           ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
                         );
                       },
                     ),
-
                   ],
                 ),
                 actions: [
@@ -264,6 +248,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       _GlassPane(
                         padding: const EdgeInsets.all(10),
                         borderRadius: 12,
+                        useBlur: true, // Keep blur for top elements
                         onTap: () {},
                         child: const Icon(Icons.notifications_outlined, color: Colors.white),
                       ),
@@ -298,6 +283,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: _GlassPane(
                       padding: EdgeInsets.zero,
                       borderRadius: 16,
+                      useBlur: true, // Keep blur
                       child: TextField(
                         style: const TextStyle(color: Colors.white),
                         decoration: InputDecoration(
@@ -358,6 +344,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                   width: 65,
                                   height: 65,
                                   borderRadius: 20,
+                                  // PERFORMANCE: Disable blur for lists
+                                  useBlur: false,
                                   color: cat.color.withOpacity(0.15),
                                   borderColor: cat.color.withOpacity(0.3),
                                   child: Center(
@@ -390,6 +378,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(24),
                     child: BackdropFilter(
+                      // Keep blur for this one large item, it's usually okay
                       filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                       child: Container(
                         padding: const EdgeInsets.all(20),
@@ -477,6 +466,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         _GlassPane(
                           padding: const EdgeInsets.all(8),
                           borderRadius: 8,
+                          useBlur: false, // Performance
                           child: const Icon(Icons.filter_list, size: 20, color: Colors.white70),
                         ),
                       ],
@@ -496,6 +486,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: _GlassPane(
                         padding: EdgeInsets.zero,
                         borderRadius: 24,
+                        // PERFORMANCE: IMPORTANT - Disable blur for big list items
+                        useBlur: false,
                         color: Colors.white.withOpacity(0.08),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -506,14 +498,19 @@ class _HomeScreenState extends State<HomeScreen> {
                                 SizedBox(
                                   height: 160,
                                   width: double.infinity,
-                                  child: Image.network(
-                                    venue.imageUrl,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Center(
-                                        child: Icon(Icons.image_not_supported, color: Colors.white.withOpacity(0.3), size: 40),
-                                      );
-                                    },
+                                  child: ClipRRect(
+                                    borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                                    child: Image.network(
+                                      venue.imageUrl,
+                                      fit: BoxFit.cover,
+                                      // PERFORMANCE: Cache size optimization
+                                      cacheHeight: 400,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return Center(
+                                          child: Icon(Icons.image_not_supported, color: Colors.white.withOpacity(0.3), size: 40),
+                                        );
+                                      },
+                                    ),
                                   ),
                                 ),
                                 // Favorite Button
@@ -523,7 +520,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                   child: _GlassPane(
                                     padding: const EdgeInsets.all(8),
                                     borderRadius: 50,
-                                    color: Colors.black.withOpacity(0.3),
+                                    useBlur: false,
+                                    color: Colors.black.withOpacity(0.4),
                                     child: const Icon(Icons.favorite_border, size: 20, color: Colors.white),
                                   ),
                                 ),
@@ -534,6 +532,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   child: _GlassPane(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                     borderRadius: 8,
+                                    useBlur: false,
                                     color: Colors.black.withOpacity(0.5),
                                     child: Row(
                                       children: [
@@ -624,7 +623,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                         padding: const EdgeInsets.symmetric(vertical: 12),
                                       ),
                                       child: const Text('View Slots', style: TextStyle(fontWeight: FontWeight.bold)),
-                                    )
+                                    ),
                                   ),
                                 ],
                               ),
@@ -642,14 +641,13 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
 
-          // 3. GLASS BOTTOM NAVIGATION
+          // 3. FLOATING NAV BAR
           FloatingNavBar(
             selectedIndex: _selectedIndex,
             onItemSelected: (index) {
               setState(() => _selectedIndex = index);
             },
           ),
-
         ],
       ),
     );
@@ -657,7 +655,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // ---------------------------------------------------------------------
-// REUSABLE "LIQUID GLASS" WIDGET
+// REUSABLE "LIQUID GLASS" WIDGET (OPTIMIZED)
 // ---------------------------------------------------------------------
 class _GlassPane extends StatelessWidget {
   final Widget child;
@@ -668,6 +666,8 @@ class _GlassPane extends StatelessWidget {
   final VoidCallback? onTap;
   final Color? color;
   final Color? borderColor;
+  // NEW: Toggle blur for performance
+  final bool useBlur;
 
   const _GlassPane({
     required this.child,
@@ -678,37 +678,48 @@ class _GlassPane extends StatelessWidget {
     this.onTap,
     this.color,
     this.borderColor,
+    this.useBlur = true, // Default to true, set false for list items
   });
 
   @override
   Widget build(BuildContext context) {
+    // 1. Base Container configuration
+    Widget content = Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: color ?? Colors.white.withOpacity(0.12), // Default frosted color
+        borderRadius: BorderRadius.circular(borderRadius),
+        border: Border.all(
+          color: borderColor ?? Colors.white.withOpacity(0.2),
+          width: 1.0,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(borderRadius),
+          child: Padding(
+            padding: padding ?? const EdgeInsets.all(12),
+            child: child,
+          ),
+        ),
+      ),
+    );
+
+    // 2. Performance Check: If useBlur is false, return just the container
+    //    (The semi-transparent color simulates glass without the GPU cost)
+    if (!useBlur) {
+      return content;
+    }
+
+    // 3. If useBlur is true, wrap in BackdropFilter (Heavy)
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Container(
-          width: width,
-          height: height,
-          decoration: BoxDecoration(
-            color: color ?? Colors.white.withOpacity(0.12), // Default frosted
-            borderRadius: BorderRadius.circular(borderRadius),
-            border: Border.all(
-              color: borderColor ?? Colors.white.withOpacity(0.2),
-              width: 1.0,
-            ),
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: onTap,
-              borderRadius: BorderRadius.circular(borderRadius),
-              child: Padding(
-                padding: padding ?? const EdgeInsets.all(12),
-                child: child,
-              ),
-            ),
-          ),
-        ),
+        child: content,
       ),
     );
   }

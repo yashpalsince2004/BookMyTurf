@@ -1,9 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/services.dart'; // Required for InputFormatters
 import 'package:intl_phone_field/intl_phone_field.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:sensors_plus/sensors_plus.dart';
 import 'dart:async';
 
 class PhoneLoginScreen extends StatefulWidget {
@@ -14,70 +13,64 @@ class PhoneLoginScreen extends StatefulWidget {
 }
 
 class _PhoneLoginScreenState extends State<PhoneLoginScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
+
   // Logic Variables
   String _phoneNumber = "";
   bool _isLoading = false;
-  StreamSubscription? _gyroStream;
 
-  // Animation Variables
-  double _offsetX = 0;
-  double _offsetY = 0;
-  late AnimationController _animController;
+  // Animation Controllers
+  late AnimationController _entranceController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
 
   @override
   void initState() {
     super.initState();
+    _preCacheAssets();
 
-    // 1. Setup Parallax Background
-    // We throttle the updates slightly or just clamp them to ensure smooth 60fps
-    _gyroStream = gyroscopeEvents.listen((GyroscopeEvent e) {
-      if (mounted) {
-        setState(() {
-          // Multiplier reduced slightly for a subtler, more premium feel
-          _offsetX = (e.y * 5).clamp(-15.0, 15.0);
-          _offsetY = (e.x * 5).clamp(-15.0, 15.0);
-        });
-      }
-    });
-
-    // 2. Setup Entrance Animation
-    _animController = AnimationController(
+    // Entrance Animation
+    _entranceController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1000),
+      duration: const Duration(milliseconds: 1200),
     );
 
     _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.1),
+      begin: const Offset(0, 0.2),
       end: Offset.zero,
     ).animate(CurvedAnimation(
-      parent: _animController,
+      parent: _entranceController,
       curve: Curves.easeOutQuart,
     ));
 
-    _fadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _animController,
+    _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(CurvedAnimation(
+      parent: _entranceController,
       curve: const Interval(0.2, 1.0, curve: Curves.easeOut),
     ));
 
-    _animController.forward();
+    _entranceController.forward();
+  }
+
+  void _preCacheAssets() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      precacheImage(const AssetImage("assets/images/turf_bg.png"), context);
+    });
   }
 
   @override
   void dispose() {
-    _gyroStream?.cancel();
-    _animController.dispose();
+    _entranceController.dispose();
     super.dispose();
   }
 
-  Future<void> _handleLogin() async {
-    if (_phoneNumber.isEmpty || _phoneNumber.length < 4) {
-      _showSnackBar("Please enter a valid phone number", isError: true);
+  // ------------------------------------
+  // LOGIC & HANDLERS
+  // ------------------------------------
+
+  Future<void> _handleGetOTP() async {
+    // Basic validation
+    if (_phoneNumber.isEmpty || _phoneNumber.length < 10) {
+      _showSnackBar("Please enter a valid 10-digit number", isError: true);
       return;
     }
 
@@ -86,27 +79,34 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
     try {
       await FirebaseAuth.instance.verifyPhoneNumber(
         phoneNumber: _phoneNumber,
-        verificationCompleted: (_) {
-          setState(() => _isLoading = false);
+
+        verificationCompleted: (PhoneAuthCredential credential) async {
+          await FirebaseAuth.instance.signInWithCredential(credential);
+          if (mounted) Navigator.pushReplacementNamed(context, "/home");
         },
+
         verificationFailed: (FirebaseAuthException e) {
-          setState(() => _isLoading = false);
+          if (mounted) setState(() => _isLoading = false);
           _showSnackBar(e.message ?? "Verification failed", isError: true);
         },
-        codeSent: (String verificationId, int? resendToken) {
-          setState(() => _isLoading = false);
-          Navigator.pushNamed(
-            context,
-            "/otp",
-            arguments: verificationId,
-          );
+
+        codeSent: (String verificationId, int? resendToken) async {
+          if (mounted) {
+            setState(() => _isLoading = false);
+            Navigator.pushNamed(
+              context,
+              "/otp",
+              arguments: verificationId,
+            );
+          }
         },
-        codeAutoRetrievalTimeout: (_) {
+
+        codeAutoRetrievalTimeout: (String verificationId) {
           if (mounted) setState(() => _isLoading = false);
         },
       );
     } catch (e) {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
       _showSnackBar("An unexpected error occurred.", isError: true);
     }
   }
@@ -115,35 +115,38 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: isError ? Colors.redAccent.withOpacity(0.8) : Colors.green,
+        backgroundColor: isError ? Colors.redAccent : Colors.green,
         behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
   }
 
+  // ------------------------------------
+  // UI BUILD
+  // ------------------------------------
+
   @override
   Widget build(BuildContext context) {
-    // Using LayoutBuilder to ensure responsiveness on all screen sizes
     return Scaffold(
       extendBody: true,
-      resizeToAvoidBottomInset: false, // Prevents background squishing
+      resizeToAvoidBottomInset: false,
+      backgroundColor: Colors.black,
       body: Stack(
         children: [
           // -------------------------------------------
-          // LAYER 1: Parallax Background
+          // 1. BACKGROUND (Zoom Effect)
           // -------------------------------------------
           Positioned.fill(
-            child: Transform.translate(
-              offset: Offset(_offsetX, _offsetY),
+            child: AnimatedScale(
+              scale: _isLoading ? 1.05 : 1.0,
+              duration: const Duration(milliseconds: 1500),
+              curve: Curves.easeInOut,
               child: Container(
                 decoration: const BoxDecoration(
-                  color: Colors.black, // Fallback color
                   image: DecorationImage(
                     image: AssetImage("assets/images/turf_bg.png"),
                     fit: BoxFit.cover,
-                    opacity: 0.8, // Slightly darkened for text readability
+                    opacity: 0.8,
                   ),
                 ),
               ),
@@ -151,11 +154,10 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
           ),
 
           // -------------------------------------------
-          // LAYER 2: Main Content
+          // 2. GLASS CARD
           // -------------------------------------------
           Center(
             child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: FadeTransition(
                 opacity: _fadeAnimation,
@@ -168,7 +170,7 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
           ),
 
           // -------------------------------------------
-          // LAYER 3: Back Button (Floating safely)
+          // 3. BACK BUTTON
           // -------------------------------------------
           Positioned(
             top: MediaQuery.of(context).padding.top + 10,
@@ -187,38 +189,19 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
     return ClipRRect(
       borderRadius: BorderRadius.circular(30),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
         child: Container(
           width: double.infinity,
           constraints: const BoxConstraints(maxWidth: 400),
           padding: const EdgeInsets.fromLTRB(24, 40, 24, 32),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.1),
+            color: Colors.white.withOpacity(0.08),
             borderRadius: BorderRadius.circular(30),
-            border: Border.all(
-              color: Colors.white.withOpacity(0.2),
-              width: 1.5,
-            ),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.white.withOpacity(0.2),
-                Colors.white.withOpacity(0.05),
-              ],
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.2),
-                blurRadius: 20,
-                spreadRadius: 5,
-              ),
-            ],
+            border: Border.all(color: Colors.white.withOpacity(0.15), width: 1.5),
           ),
           child: Column(
-            mainAxisSize: MainAxisSize.min, // Dynamic height
+            mainAxisSize: MainAxisSize.min,
             children: [
-              // Title
               Text(
                 "Welcome Back",
                 style: TextStyle(
@@ -230,7 +213,7 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
               ),
               const SizedBox(height: 8),
               Text(
-                "Enter your phone number to continue",
+                "Enter your phone number",
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
@@ -239,15 +222,53 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
               ),
               const SizedBox(height: 32),
 
-              // Input Field
               _buildGlassInput(),
 
               const SizedBox(height: 24),
 
-              // Action Button
-              _buildGlassButton(
-                text: "Get OTP",
-                onTap: _handleLogin,
+              // BOUNCY BUTTON
+              BouncyButton(
+                onTap: _handleGetOTP,
+                child: Container(
+                  width: double.infinity,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    gradient: LinearGradient(
+                      colors: [
+                        const Color(0xFF4CAF50).withOpacity(0.9),
+                        const Color(0xFF2E7D32).withOpacity(0.9),
+                      ],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF4CAF50).withOpacity(0.3),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: _isLoading
+                        ? const SizedBox(
+                      height: 24,
+                      width: 24,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2.5,
+                      ),
+                    )
+                        : const Text(
+                      "Get OTP",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
@@ -259,7 +280,7 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
   Widget _buildGlassInput() {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.15),
+        color: Colors.black.withOpacity(0.2),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withOpacity(0.15)),
       ),
@@ -268,13 +289,26 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
         initialCountryCode: 'IN',
         dropdownIcon: const Icon(Icons.keyboard_arrow_down, color: Colors.white70),
         dropdownTextStyle: const TextStyle(color: Colors.white, fontSize: 16),
-        style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500),
+        style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w500
+        ),
         cursorColor: Colors.white,
+
+        // ---------------------------------------------
+        // LIMIT INPUT TO 10 DIGITS
+        // ---------------------------------------------
+        inputFormatters: [
+          FilteringTextInputFormatter.digitsOnly, // Allow only numbers
+          LengthLimitingTextInputFormatter(10),   // Max 10 characters
+        ],
+
+        disableLengthCheck: true, // Hides the built-in counter text
         decoration: const InputDecoration(
           hintText: "Phone Number",
           hintStyle: TextStyle(color: Colors.white38),
           border: InputBorder.none,
-          counterText: "", // Hides the character counter
           contentPadding: EdgeInsets.symmetric(vertical: 14),
         ),
         onChanged: (phone) {
@@ -283,53 +317,63 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
       ),
     );
   }
+}
 
-  Widget _buildGlassButton({required String text, required VoidCallback onTap}) {
-    return Container(
-      width: double.infinity,
-      height: 56,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        gradient: LinearGradient(
-          colors: [
-            const Color(0xFF4CAF50).withOpacity(0.8), // Turf Green
-            const Color(0xFF2E7D32).withOpacity(0.8),
-          ],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF4CAF50).withOpacity(0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: _isLoading ? null : onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: Center(
-            child: _isLoading
-                ? const SizedBox(
-              height: 24,
-              width: 24,
-              child: CircularProgressIndicator(
-                color: Colors.white,
-                strokeWidth: 2.5,
-              ),
-            )
-                : Text(
-              text,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1,
-              ),
-            ),
-          ),
-        ),
+// -------------------------------------------
+// BOUNCY BUTTON WIDGET
+// -------------------------------------------
+class BouncyButton extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onTap;
+
+  const BouncyButton({
+    super.key,
+    required this.child,
+    required this.onTap
+  });
+
+  @override
+  State<BouncyButton> createState() => _BouncyButtonState();
+}
+
+class _BouncyButtonState extends State<BouncyButton> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onTapDown(TapDownDetails details) => _controller.forward();
+  void _onTapUp(TapUpDetails details) {
+    _controller.reverse();
+    widget.onTap();
+  }
+  void _onTapCancel() => _controller.reverse();
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: _onTapDown,
+      onTapUp: _onTapUp,
+      onTapCancel: _onTapCancel,
+      child: ScaleTransition(
+        scale: _scaleAnimation,
+        child: widget.child,
       ),
     );
   }
