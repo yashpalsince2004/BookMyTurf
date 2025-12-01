@@ -37,7 +37,7 @@ class BookingHistoryScreen extends StatelessWidget {
             child: Container(
               decoration: const BoxDecoration(
                 image: DecorationImage(
-                  image: AssetImage("assets/images/turf_bg.png"),
+                  image: AssetImage("assets/images/loc_bg.png"),
                   fit: BoxFit.cover,
                 ),
               ),

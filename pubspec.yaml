@@ -73,6 +73,9 @@ dependencies:
 # Calander
   table_calendar: ^3.0.9
 
+# EFFECTS
+  shimmer_animation: ^2.1.0
+
 
 
 
