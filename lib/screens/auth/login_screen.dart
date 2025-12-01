@@ -81,26 +81,39 @@ class _LoginScreenState extends State<LoginScreen>
   // ------------------------------------
 
   Future<void> _handleGoogleSignIn() async {
+    // Prevent double taps
+    if (_loadingProvider != null) return;
+
     setState(() {
-      _isAnimatingOut = true;
       _loadingProvider = 'google';
     });
 
-    await Future.delayed(const Duration(milliseconds: 500)); // Slightly faster
-
-    if (!mounted) return;
-    setState(() => _showLoadingOverlay = true);
-
-    _lottieController.reset();
-    final animationFuture = _lottieController.forward();
-
     try {
+      // 1. Wait for User to Sign In (Google Sheet)
       final loginResult = await signInWithGoogle();
 
       if (loginResult != null && mounted) {
-        await animationFuture;
+        // 2. SUCCESS! Now start the visual transition
+
+        // A. Slide Card Down
+        setState(() {
+          _isAnimatingOut = true;
+        });
+
+        // B. Wait for slide to finish
+        await Future.delayed(const Duration(milliseconds: 600));
+
+        if (!mounted) return;
+
+        // C. Show Lottie Overlay & Play Animation
+        setState(() => _showLoadingOverlay = true);
+        _lottieController.reset();
+        await _lottieController.forward();
+
+        // D. Navigate to Home
         Navigator.pushReplacementNamed(context, "/home");
       } else {
+        // User cancelled
         _resetUI();
       }
     } catch (e) {

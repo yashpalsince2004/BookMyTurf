@@ -2,6 +2,7 @@ import 'package:bookmyturf/screens/home/booking_history_screen.dart';
 import 'package:bookmyturf/screens/main_wrapper.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/services.dart';
 import 'screens/home/home_screen.dart';
 
 
@@ -22,8 +23,14 @@ void main() async {
   );
 
   print("🔥 Firebase Initialized Successfully!");
-
   runApp(const MyApp());
+
+  // --- 2. ADD THIS BLOCK TO LOCK PORTRAIT MODE ---
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
+  // -----------------------------------------------
 }
 
 class MyApp extends StatelessWidget {

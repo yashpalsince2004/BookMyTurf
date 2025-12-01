@@ -1,8 +1,9 @@
 import 'dart:ui';
-import 'package:bookmyturf/screens/home/booking_history_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+// Check these imports match your project structure
+import 'package:bookmyturf/screens/home/booking_history_screen.dart';
 import 'account_settings_screen.dart';
 import 'home/likes_screen.dart';
 
@@ -17,7 +18,7 @@ class ProfileScreen extends StatelessWidget {
       extendBodyBehindAppBar: true,
       body: Stack(
         children: [
-          // Background Turf Image
+          // 1. Fixed Background Image (Optimized: Doesn't scroll with content)
           Positioned.fill(
             child: Image.asset(
               "assets/images/turf_bg.png",
@@ -25,25 +26,28 @@ class ProfileScreen extends StatelessWidget {
             ),
           ),
 
-          // Dark overlay
+          // 2. Dark Overlay
           Positioned.fill(
-            child: Container(color: Colors.black.withOpacity(0.55)),
+            child: ColoredBox(color: Colors.black.withOpacity(0.55)),
           ),
 
-          // Main Content
-          SingleChildScrollView(
-            padding: const EdgeInsets.only(top: 80, bottom: 140),
-            physics: const BouncingScrollPhysics(),
-            child: Column(
-              children: [
-                _buildProfileHeader(user),
-                const SizedBox(height: 20),
-                _buildStatsRow(),
-                const SizedBox(height: 20),
-                _buildMenuList(context),
-                const SizedBox(height: 20),
-                _logoutButton(context),
-              ],
+          // 3. Scrollable Content
+          SafeArea(
+            top: false,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.only(top: 80, bottom: 120),
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                children: [
+                  _ProfileHeader(user: user),
+                  const SizedBox(height: 25),
+                  const _StatsRow(),
+                  const SizedBox(height: 25),
+                  _buildMenuList(context),
+                  const SizedBox(height: 30),
+                  _LogoutButton(),
+                ],
+              ),
             ),
           ),
         ],
@@ -51,10 +55,119 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  // ----------------------------------------------------------------------
-  // PROFILE HEADER WITH FIREBASE USER
-  // ----------------------------------------------------------------------
-  Widget _buildProfileHeader(User? user) {
+  Widget _buildMenuList(BuildContext context) {
+    return Column(
+      children: [
+        ProfileMenuTile(
+          icon: Icons.person,
+          title: "Account Settings",
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountSettingsScreen())),
+        ),
+        const ProfileMenuTile(
+          icon: Icons.payment,
+          title: "Payment Methods",
+        ),
+        ProfileMenuTile(
+          icon: Icons.calendar_month,
+          title: "My Bookings",
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BookingHistoryScreen())),
+        ),
+        ProfileMenuTile(
+          icon: Icons.favorite,
+          title: "Saved Turfs",
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LikesScreen())),
+        ),
+        const ProfileMenuTile(icon: Icons.notifications, title: "Notifications"),
+        const ProfileMenuTile(icon: Icons.support_agent, title: "Help & Support"),
+        const ProfileMenuTile(icon: Icons.info_outline, title: "About App"),
+      ],
+    );
+  }
+}
+
+// ----------------------------------------------------------------------
+// 1. REUSABLE BOUNCY BUTTON ANIMATION WRAPPER
+// ----------------------------------------------------------------------
+class BouncyButton extends StatefulWidget {
+  final Widget child;
+  final VoidCallback? onPressed;
+  final double scaleFactor;
+
+  const BouncyButton({
+    super.key,
+    required this.child,
+    required this.onPressed,
+    this.scaleFactor = 0.95,
+  });
+
+  @override
+  State<BouncyButton> createState() => _BouncyButtonState();
+}
+
+class _BouncyButtonState extends State<BouncyButton> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: widget.scaleFactor).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onTapDown(TapDownDetails details) {
+    _controller.forward();
+  }
+
+  void _onTapUp(TapUpDetails details) {
+    _controller.reverse();
+    if (widget.onPressed != null) {
+      // Small delay to let the animation play
+      Future.delayed(const Duration(milliseconds: 100), () {
+        widget.onPressed!();
+      });
+    }
+  }
+
+  void _onTapCancel() {
+    _controller.reverse();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: _onTapDown,
+      onTapUp: _onTapUp,
+      onTapCancel: _onTapCancel,
+      child: ScaleTransition(
+        scale: _scaleAnimation,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+// ----------------------------------------------------------------------
+// 2. WIDGETS (Extracted for Performance)
+// ----------------------------------------------------------------------
+
+class _ProfileHeader extends StatelessWidget {
+  final User? user;
+  const _ProfileHeader({required this.user});
+
+  @override
+  Widget build(BuildContext context) {
     return Center(
       child: ClipRRect(
         borderRadius: BorderRadius.circular(26),
@@ -70,19 +183,14 @@ class ProfileScreen extends StatelessWidget {
             ),
             child: Column(
               children: [
-                // Profile Avatar
                 CircleAvatar(
                   radius: 48,
                   backgroundColor: Colors.greenAccent.withOpacity(0.3),
                   backgroundImage: user?.photoURL != null
                       ? NetworkImage(user!.photoURL!)
-                      : const AssetImage("assets/images/default_user.png")
-                  as ImageProvider,
+                      : const AssetImage("assets/images/default_user.png") as ImageProvider,
                 ),
-
                 const SizedBox(height: 14),
-
-                // Name
                 Text(
                   user?.displayName ?? "Guest User",
                   style: const TextStyle(
@@ -91,39 +199,28 @@ class ProfileScreen extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-
                 const SizedBox(height: 4),
-
-                // Email or phone
                 Text(
-                  user?.email ??
-                      user?.phoneNumber ??
-                      "No email/phone linked",
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.7),
-                    fontSize: 14,
-                  ),
+                  user?.email ?? user?.phoneNumber ?? "No email/phone linked",
+                  style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 14),
                 ),
-
                 const SizedBox(height: 16),
 
-                // Edit Button
-                ElevatedButton(
-                  onPressed: () {},
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.greenAccent,
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 10,
-                    ),
-                    shape: RoundedRectangleBorder(
+                // Using BouncyButton for the Edit Action
+                BouncyButton(
+                  onPressed: () {
+                    // Navigate to Edit Profile
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.greenAccent,
                       borderRadius: BorderRadius.circular(14),
                     ),
-                  ),
-                  child: const Text(
-                    "Edit Profile",
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                    child: const Text(
+                      "Edit Profile",
+                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
+                    ),
                   ),
                 )
               ],
@@ -133,138 +230,158 @@ class ProfileScreen extends StatelessWidget {
       ),
     );
   }
+}
 
-  // ----------------------------------------------------------------------
-  // STATIC STATS (can link with backend later)
-  // ----------------------------------------------------------------------
-  Widget _buildStatsRow() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 22),
+class _StatsRow extends StatelessWidget {
+  const _StatsRow();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: 22),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _statCard("Bookings", "24", Icons.calendar_month),
-          _statCard("Wallet", "₹850", Icons.account_balance_wallet),
-          _statCard("Saved", "12", Icons.favorite),
+          StatCard(title: "Bookings", value: "24", icon: Icons.calendar_month),
+          StatCard(title: "Wallet", value: "₹850", icon: Icons.account_balance_wallet),
+          StatCard(title: "Saved", value: "12", icon: Icons.favorite),
         ],
       ),
     );
   }
+}
 
-  Widget _statCard(String title, String value, IconData icon) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(18),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Container(
-          width: 95,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: Colors.white.withOpacity(0.2)),
-          ),
-          child: Column(
-            children: [
-              Icon(icon, color: Colors.greenAccent, size: 26),
-              const SizedBox(height: 6),
-              Text(
-                value,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                title,
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.8),
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+class StatCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final IconData icon;
 
-  // ----------------------------------------------------------------------
-  // MENU LIST
-  // ----------------------------------------------------------------------
-  Widget _buildMenuList(BuildContext context) {
-    return Column(
-      children: [
-        _menuTile(Icons.person, "Account Settings", onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const AccountSettingsScreen()),
-          );
-        }),
+  const StatCard({
+    super.key,
+    required this.title,
+    required this.value,
+    required this.icon,
+  });
 
-        _menuTile(Icons.payment, "Payment Methods"),
-
-        _menuTile(Icons.calendar_month, "My Bookings", onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const BookingHistoryScreen()),
-          );
-        }),
-        _menuTile(Icons.favorite, "Saved Turfs", onTap: () {
-           Navigator.push(
-             context,
-             MaterialPageRoute(builder: (_) => const LikesScreen()),
-          );
-        }),
-        _menuTile(Icons.notifications, "Notifications"),
-        _menuTile(Icons.support_agent, "Help & Support"),
-        _menuTile(Icons.info_outline, "About App"),
-      ],
-    );
-  }
-
-  Widget _menuTile(IconData icon, String title, {VoidCallback? onTap}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 6),
+  @override
+  Widget build(BuildContext context) {
+    // Making stats bouncy too because it feels nice
+    return BouncyButton(
+      scaleFactor: 0.90,
+      onPressed: () {
+        // Optional: Navigate to detailed stat view
+      },
       child: ClipRRect(
         borderRadius: BorderRadius.circular(18),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-          child: ListTile(
-            tileColor: Colors.white.withOpacity(0.10),
-            leading: Icon(icon, color: Colors.greenAccent),
-            title: Text(
-              title,
-              style: const TextStyle(color: Colors.white),
+          child: Container(
+            width: 95,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: Colors.white.withOpacity(0.2)),
             ),
-            trailing: const Icon(Icons.arrow_forward_ios,
-                color: Colors.white54, size: 16),
-            onTap: onTap,
+            child: Column(
+              children: [
+                Icon(icon, color: Colors.greenAccent, size: 26),
+                const SizedBox(height: 6),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  title,
+                  style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
+}
 
+class ProfileMenuTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final VoidCallback? onTap;
 
-  // ----------------------------------------------------------------------
-  // LOGOUT BUTTON
-  // ----------------------------------------------------------------------
-  Widget _logoutButton(BuildContext context) {
+  const ProfileMenuTile({
+    super.key,
+    required this.icon,
+    required this.title,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 6),
+      child: BouncyButton(
+        onPressed: onTap ?? () {},
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              color: Colors.white.withOpacity(0.10),
+              child: Row(
+                children: [
+                  Icon(icon, color: Colors.greenAccent),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(color: Colors.white, fontSize: 15),
+                    ),
+                  ),
+                  const Icon(Icons.arrow_forward_ios, color: Colors.white54, size: 16),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LogoutButton extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 22),
-      child: TextButton(
+      child: BouncyButton(
         onPressed: () async {
           await FirebaseAuth.instance.signOut();
-          Navigator.pushNamedAndRemoveUntil(context, "/login", (_) => false);
+          if (context.mounted) {
+            Navigator.pushNamedAndRemoveUntil(context, "/login", (_) => false);
+          }
         },
-        child: Text(
-          "Log Out",
-          style: TextStyle(
-            color: Colors.redAccent.withOpacity(0.9),
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
+            color: Colors.redAccent.withOpacity(0.1),
+          ),
+          child: Center(
+            child: Text(
+              "Log Out",
+              style: TextStyle(
+                color: Colors.redAccent.withOpacity(0.9),
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ),
       ),

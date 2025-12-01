@@ -4,8 +4,10 @@ import 'package:flutter/services.dart';
 import 'package:bookmyturf/widgets/floating_nav_bar.dart'; // Ensure this path is correct
 import 'package:permission_handler/permission_handler.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // IMPORTED
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'dart:async'; // For StreamSubscription
 
 import '../city_picker_screen.dart'; // Ensure path is correct
 import '../slot_booking_screen.dart'; // Ensure path is correct
@@ -55,11 +57,105 @@ class _HomeScreenState extends State<HomeScreen> {
   String? currentCity;
   int _selectedIndex = 0;
 
+  // --- FAVORITES LOGIC VARIABLES ---
+  List<String> _favoriteTurfIds = [];
+  StreamSubscription<DocumentSnapshot>? _favSubscription;
+
   @override
   void initState() {
     super.initState();
     _askLocationPermission();
     _fetchLocation();
+    _listenToFavorites(); // Start listening to Firestore
+    _ensureUserDocumentExists(); // <--- ADD THIS CALL
+  }
+  // --- NEW ROBUST FUNCTION ---
+  Future<void> _ensureUserDocumentExists() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        print("👤 Checking database for User ID: ${user.uid}");
+
+        final userDocRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
+        final docSnapshot = await userDocRef.get();
+
+        if (!docSnapshot.exists) {
+          print("📝 Document missing. Creating new user document...");
+
+          await userDocRef.set({
+            'uid': user.uid,
+            'email': user.email ?? 'No Email',
+            'phone': user.phoneNumber ?? 'No Phone',
+            'name': user.displayName ?? 'New Player',
+            'createdAt': FieldValue.serverTimestamp(),
+            'favTurf': [], // Empty favorites list
+          }, SetOptions(merge: true));
+
+          print("✅ SUCCESS: User document created in Firestore!");
+        } else {
+          print("ℹ️ User document already exists. No action needed.");
+        }
+      } else {
+        print("❌ ERROR: No user is currently logged in.");
+      }
+    } catch (e) {
+      print("🔥 FIRESTORE ERROR: $e");
+    }
+  }
+// ... rest of your code (dispose, toggleFavorite, etc.)
+  @override
+  void dispose() {
+    _favSubscription?.cancel(); // Clean up listener
+    super.dispose();
+  }
+
+  // 1. LISTEN TO FIRESTORE CHANGES LIVE
+  void _listenToFavorites() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      _favSubscription = FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .snapshots()
+          .listen((snapshot) {
+        if (snapshot.exists) {
+          final data = snapshot.data() as Map<String, dynamic>?;
+          if (data != null && data.containsKey('favTurf')) {
+            setState(() {
+              _favoriteTurfIds = List<String>.from(data['favTurf']);
+            });
+          }
+        }
+      });
+    }
+  }
+
+  // 2. TOGGLE LIKE FUNCTION
+  Future<void> _toggleFavorite(String turfId) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please login to save favorites!")),
+      );
+      return;
+    }
+
+    final userRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
+
+    // Haptic feedback for better UX
+    HapticFeedback.mediumImpact();
+
+    if (_favoriteTurfIds.contains(turfId)) {
+      // Remove from favorites
+      await userRef.update({
+        'favTurf': FieldValue.arrayRemove([turfId])
+      });
+    } else {
+      // Add to favorites (set with merge ensures doc exists)
+      await userRef.set({
+        'favTurf': FieldValue.arrayUnion([turfId])
+      }, SetOptions(merge: true));
+    }
   }
 
   Future<void> _fetchLocation() async {
@@ -198,16 +294,15 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           const Icon(Icons.location_on, size: 18, color: Colors.greenAccent),
                           const SizedBox(width: 4),
-                          // --- FIX START: Wrapped in Flexible ---
+                          // Flexible prevents overflow
                           Flexible(
                             child: Text(
                               currentCity ?? "Select Location",
                               style: const TextStyle(color: Colors.white, fontSize: 15),
-                              overflow: TextOverflow.ellipsis, // Add dots if too long
+                              overflow: TextOverflow.ellipsis,
                               maxLines: 1,
                             ),
                           ),
-                          // --- FIX END ---
                           const Icon(Icons.keyboard_arrow_down, color: Colors.white70),
                         ],
                       ),
@@ -481,6 +576,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 delegate: SliverChildBuilderDelegate(
                       (context, index) {
                     final venue = _nearbyTurfs[index];
+
+                    // CHECK IF LIKED
+                    final isLiked = _favoriteTurfIds.contains(venue.id);
+
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 20, left: 16, right: 16),
                       child: _GlassPane(
@@ -513,7 +612,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     ),
                                   ),
                                 ),
-                                // Favorite Button
+                                // --- WORKING LIKE BUTTON ---
                                 Positioned(
                                   top: 12,
                                   right: 12,
@@ -522,7 +621,14 @@ class _HomeScreenState extends State<HomeScreen> {
                                     borderRadius: 50,
                                     useBlur: false,
                                     color: Colors.black.withOpacity(0.4),
-                                    child: const Icon(Icons.favorite_border, size: 20, color: Colors.white),
+                                    onTap: () {
+                                      _toggleFavorite(venue.id);
+                                    },
+                                    child: Icon(
+                                      isLiked ? Icons.favorite : Icons.favorite_border,
+                                      size: 20,
+                                      color: isLiked ? Colors.redAccent : Colors.white,
+                                    ),
                                   ),
                                 ),
                                 // Rating Badge

@@ -1,3 +1,4 @@
+import 'dart:ui'; // Required for ImageFilter
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -12,176 +13,294 @@ class BookingHistoryScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final userId = FirebaseAuth.instance.currentUser?.uid;
 
+    // --- 1. HANDLE NOT LOGGED IN ---
     if (userId == null) {
       return Scaffold(
-        appBar: AppBar(
-          title: const Text("My Bookings"),
-          backgroundColor: Colors.green,
+        backgroundColor: Colors.black,
+        appBar: _buildGlassAppBar("My Bookings"),
+        body: const Center(
+          child: Text("Please login to view bookings.",
+              style: TextStyle(color: Colors.white70)),
         ),
-        body: const Center(child: Text("Please login to view bookings.")),
       );
     }
 
+    // --- 2. MAIN UI ---
     return Scaffold(
-      backgroundColor: const Color(0xffF7F6FB),
-      appBar: AppBar(
-        title: const Text("My Bookings"),
-        backgroundColor: Colors.green,
-      ),
-      body: StreamBuilder(
-        stream: FirebaseFirestore.instance
-            .collection("bookings")
-            .where("userId", isEqualTo: userId)
-            .orderBy("timestamp", descending: true)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator(color: Colors.green));
-          }
-
-          final bookings = snapshot.data!.docs;
-
-          if (bookings.isEmpty) {
-            return const Center(
-              child: Text("No bookings yet.",
-                  style: TextStyle(fontSize: 16, color: Colors.black54)),
-            );
-          }
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: bookings.length,
-            itemBuilder: (context, index) {
-              final data = bookings[index].data() as Map<String, dynamic>;
-
-              final turfName = data["turfName"] ?? "";
-              final slot = data["slot"] ?? "";
-              final price = data["price"] ?? 0;
-              final date = data["date"];
-              final status = data["status"] ?? "confirmed";
-              final turfImage = data["turfImage"] ?? "https://i.ibb.co/vJkFq7k/no-image.jpg";
-
-
-
-              final formattedDate = DateFormat("dd MMM yyyy").format(DateTime.parse(date));
-
-              return GestureDetector(
-                onTap: () {},
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 18),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.grey.shade300),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 6,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      // ----- Left: TEXT INFO -----
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              turfName,
-                              style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black87),
-                            ),
-                            const SizedBox(height: 6),
-                            Text("Slot: $slot",
-                                style:
-                                const TextStyle(fontSize: 14, color: Colors.black87)),
-                            Text("Date: $formattedDate",
-                                style: const TextStyle(
-                                    fontSize: 14, color: Colors.black54)),
-                            const SizedBox(height: 8),
-                            _buildStatusChip(status),
-                            const SizedBox(height: 8),
-                            InkWell(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => BookingDetailsScreen(
-                                      bookingData: data,
-                                      bookingId: bookings[index].id,
-                                    ),
-                                  ),
-                                );
-                              },
-
-                              child: const Text(
-                                "More detail",
-                                style: TextStyle(
-                                    color: Colors.blue,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500),
-                              ),
-                            )
-                          ],
-                        ),
-                      ),
-
-                      // ----- Right: IMAGE -----
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: Image.network(
-                          turfImage,
-                          width: 90,
-                          height: 90,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            width: 90,
-                            height: 90,
-                            color: Colors.grey.shade200,
-                            child: const Icon(Icons.image_not_supported, size: 28),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+      extendBodyBehindAppBar: true, // Important for glass effect
+      backgroundColor: Colors.black,
+      appBar: _buildGlassAppBar("My Bookings"),
+      body: Stack(
+        children: [
+          // BACKGROUND IMAGE
+          Positioned.fill(
+            child: Container(
+              decoration: const BoxDecoration(
+                image: DecorationImage(
+                  image: AssetImage("assets/images/turf_bg.png"),
+                  fit: BoxFit.cover,
                 ),
+              ),
+              child: Container(
+                color: Colors.black.withOpacity(0.8), // Darker overlay for text readability
+              ),
+            ),
+          ),
+
+          // LIST CONTENT
+          StreamBuilder(
+            stream: FirebaseFirestore.instance
+                .collection("bookings")
+                .where("userId", isEqualTo: userId)
+                .orderBy("timestamp", descending: true)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator(color: Colors.greenAccent));
+              }
+
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                return const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.history, size: 60, color: Colors.white24),
+                      SizedBox(height: 16),
+                      Text("No bookings yet.",
+                          style: TextStyle(fontSize: 16, color: Colors.white54)),
+                    ],
+                  ),
+                );
+              }
+
+              final bookings = snapshot.data!.docs;
+
+              return ListView.builder(
+                // Add padding for AppBar height so items aren't hidden behind it
+                padding: const EdgeInsets.only(top: 110, left: 16, right: 16, bottom: 20),
+                itemCount: bookings.length,
+                itemBuilder: (context, index) {
+                  final data = bookings[index].data();
+                  final bookingId = bookings[index].id;
+
+                  return _BookingCard(data: data, bookingId: bookingId);
+                },
               );
             },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Helper method for consistent Glass AppBar
+  PreferredSizeWidget _buildGlassAppBar(String title) {
+    return AppBar(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      centerTitle: true,
+      title: Text(
+        title,
+        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+      ),
+      iconTheme: const IconThemeData(color: Colors.white),
+      flexibleSpace: ClipRRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            color: Colors.black.withOpacity(0.4),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------
+// GLASS CARD COMPONENT
+// ---------------------------------------------
+class _BookingCard extends StatelessWidget {
+  final Map<String, dynamic> data;
+  final String bookingId;
+
+  const _BookingCard({required this.data, required this.bookingId});
+
+  @override
+  Widget build(BuildContext context) {
+    final turfName = data["turfName"] ?? "Unknown Turf";
+    final slot = data["slot"] ?? "N/A";
+    final date = data["date"];
+    final status = data["status"] ?? "confirmed";
+    final turfImage = data["turfImage"] ?? "https://i.ibb.co/vJkFq7k/no-image.jpg";
+
+    String formattedDate = "Unknown Date";
+    if (date != null) {
+      try {
+        formattedDate = DateFormat("dd MMM yyyy").format(DateTime.parse(date));
+      } catch (e) {
+        formattedDate = date.toString();
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: _GlassPane(
+        onTap: () {
+          // Navigate to details (Assuming you have this screen ready)
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => BookingDetailsScreen(
+                bookingData: data,
+                bookingId: bookingId,
+              ),
+            ),
           );
         },
+        child: Row(
+          children: [
+            // ----- LEFT: TEXT INFO -----
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    turfName,
+                    style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white),
+                  ),
+                  const SizedBox(height: 6),
+
+                  // Row for Date & Time icons
+                  Row(
+                    children: [
+                      const Icon(Icons.calendar_today, size: 12, color: Colors.white54),
+                      const SizedBox(width: 4),
+                      Text(formattedDate,
+                          style: const TextStyle(fontSize: 13, color: Colors.white70)),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(Icons.access_time, size: 12, color: Colors.white54),
+                      const SizedBox(width: 4),
+                      Text(slot,
+                          style: const TextStyle(fontSize: 13, color: Colors.white70)),
+                    ],
+                  ),
+
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      _buildStatusChip(status),
+                      const Spacer(),
+                      const Text(
+                        "More details >",
+                        style: TextStyle(
+                            color: Colors.greenAccent,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  )
+                ],
+              ),
+            ),
+
+            const SizedBox(width: 12),
+
+            // ----- RIGHT: IMAGE -----
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.network(
+                turfImage,
+                width: 80,
+                height: 80,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  width: 80,
+                  height: 80,
+                  color: Colors.white10,
+                  child: const Icon(Icons.broken_image, color: Colors.white24),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildStatusChip(String status) {
     Color color;
+    String label;
 
-    switch (status) {
+    switch (status.toLowerCase()) {
       case "cancelled":
-        color = Colors.red;
+        color = Colors.redAccent;
+        label = "Cancelled";
         break;
       case "pending":
-        color = Colors.orange;
+        color = Colors.orangeAccent;
+        label = "Pending";
         break;
       default:
-        color = Colors.green;
+        color = Colors.greenAccent;
+        label = "Confirmed";
     }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(8),
+        color: color.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(0.5), width: 1),
       ),
       child: Text(
-        status.toUpperCase(),
+        label,
         style: TextStyle(
-            fontSize: 12, fontWeight: FontWeight.bold, color: color),
+            fontSize: 11, fontWeight: FontWeight.bold, color: color),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------
+// REUSABLE GLASS PANE (COPIED FROM HOME SCREEN)
+// ---------------------------------------------------------------------
+class _GlassPane extends StatelessWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+
+  const _GlassPane({
+    required this.child,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.08), // Frosted glass look
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.1),
+          width: 1.0,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: child, // No Blur here for performance (same as Home Screen optimization)
+          ),
+        ),
       ),
     );
   }
