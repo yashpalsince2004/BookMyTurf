@@ -8,40 +8,10 @@ import 'package:cloud_firestore/cloud_firestore.dart'; // IMPORTED
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'dart:async'; // For StreamSubscription
-
+import 'package:bookmyturf/widgets/glass_pane.dart'; // GLASS PANEL
+import 'package:bookmyturf/models/turf_models.dart'; // TURF MODELS
 import '../city_picker_screen.dart'; // Ensure path is correct
 import '../slot_booking_screen.dart'; // Ensure path is correct
-
-// ---------------------------------------------
-// MODELS
-// ---------------------------------------------
-class SportCategory {
-  final String name;
-  final IconData icon;
-  final Color color;
-
-  SportCategory(this.name, this.icon, this.color);
-}
-
-class TurfVenue {
-  final String id;
-  final String name;
-  final String location;
-  final double rating;
-  final int pricePerHour;
-  final String imageUrl;
-  final String distance;
-
-  TurfVenue({
-    required this.id,
-    required this.name,
-    required this.location,
-    required this.rating,
-    required this.pricePerHour,
-    required this.imageUrl,
-    required this.distance,
-  });
-}
 
 // ---------------------------------------------
 // HOME SCREEN
@@ -340,7 +310,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 actions: [
                   Stack(
                     children: [
-                      _GlassPane(
+                      GlassPane(
                         padding: const EdgeInsets.all(10),
                         borderRadius: 12,
                         useBlur: true, // Keep blur for top elements
@@ -375,7 +345,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   preferredSize: const Size.fromHeight(70),
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    child: _GlassPane(
+                    child: GlassPane(
                       padding: EdgeInsets.zero,
                       borderRadius: 16,
                       useBlur: true, // Keep blur
@@ -435,7 +405,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             padding: const EdgeInsets.only(right: 16),
                             child: Column(
                               children: [
-                                _GlassPane(
+                                GlassPane(
                                   width: 65,
                                   height: 65,
                                   borderRadius: 20,
@@ -558,7 +528,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           'Near You',
                           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                         ),
-                        _GlassPane(
+                        GlassPane(
                           padding: const EdgeInsets.all(8),
                           borderRadius: 8,
                           useBlur: false, // Performance
@@ -582,7 +552,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 20, left: 16, right: 16),
-                      child: _GlassPane(
+                      child: GlassPane(
                         padding: EdgeInsets.zero,
                         borderRadius: 24,
                         // PERFORMANCE: IMPORTANT - Disable blur for big list items
@@ -616,7 +586,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 Positioned(
                                   top: 12,
                                   right: 12,
-                                  child: _GlassPane(
+                                  child: GlassPane(
                                     padding: const EdgeInsets.all(8),
                                     borderRadius: 50,
                                     useBlur: false,
@@ -635,7 +605,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 Positioned(
                                   top: 12,
                                   left: 12,
-                                  child: _GlassPane(
+                                  child: GlassPane(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                     borderRadius: 8,
                                     useBlur: false,
@@ -755,77 +725,6 @@ class _HomeScreenState extends State<HomeScreen> {
             },
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------
-// REUSABLE "LIQUID GLASS" WIDGET (OPTIMIZED)
-// ---------------------------------------------------------------------
-class _GlassPane extends StatelessWidget {
-  final Widget child;
-  final EdgeInsetsGeometry? padding;
-  final double borderRadius;
-  final double? width;
-  final double? height;
-  final VoidCallback? onTap;
-  final Color? color;
-  final Color? borderColor;
-  // NEW: Toggle blur for performance
-  final bool useBlur;
-
-  const _GlassPane({
-    required this.child,
-    this.padding,
-    this.borderRadius = 16,
-    this.width,
-    this.height,
-    this.onTap,
-    this.color,
-    this.borderColor,
-    this.useBlur = true, // Default to true, set false for list items
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    // 1. Base Container configuration
-    Widget content = Container(
-      width: width,
-      height: height,
-      decoration: BoxDecoration(
-        color: color ?? Colors.white.withOpacity(0.12), // Default frosted color
-        borderRadius: BorderRadius.circular(borderRadius),
-        border: Border.all(
-          color: borderColor ?? Colors.white.withOpacity(0.2),
-          width: 1.0,
-        ),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(borderRadius),
-          child: Padding(
-            padding: padding ?? const EdgeInsets.all(12),
-            child: child,
-          ),
-        ),
-      ),
-    );
-
-    // 2. Performance Check: If useBlur is false, return just the container
-    //    (The semi-transparent color simulates glass without the GPU cost)
-    if (!useBlur) {
-      return content;
-    }
-
-    // 3. If useBlur is true, wrap in BackdropFilter (Heavy)
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(borderRadius),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: content,
       ),
     );
   }
