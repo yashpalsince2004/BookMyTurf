@@ -15,8 +15,8 @@ class BookingDetailsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final turfName = bookingData["turfName"] ?? "Unknown Turf";
-    final turfImage = bookingData["turfImage"] ?? "https://i.ibb.co/vJkFq7k/no-image.jpg";
+    // 1. Get basic booking info (Price, Slot, Date, Status) immediately
+    final turfId = bookingData["turfId"]; // We need this to fetch details
     final price = bookingData["price"] ?? 0;
     final slot = bookingData["slot"] ?? "N/A";
     final date = bookingData["date"];
@@ -62,145 +62,179 @@ class BookingDetailsScreen extends StatelessWidget {
             ),
           ),
 
-          // 2. SCROLLABLE CONTENT
-          SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 110, 20, 30), // Top padding for AppBar
-            child: Column(
-              children: [
-                // --- IMAGE CARD ---
-                Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.5),
-                        blurRadius: 15,
-                        offset: const Offset(0, 5),
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: Image.network(
-                      turfImage,
-                      height: 220,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        height: 220,
-                        color: Colors.white10,
-                        child: const Icon(Icons.broken_image, color: Colors.white24, size: 50),
-                      ),
-                    ),
-                  ),
-                ),
+          // 2. FETCH TURF DETAILS & SCROLLABLE CONTENT
+          FutureBuilder<DocumentSnapshot>(
+              future: FirebaseFirestore.instance.collection('turfs').doc(turfId).get(),
+              builder: (context, snapshot) {
 
-                const SizedBox(height: 24),
+                // Default values while loading or on error
+                String displayTurfName = "Loading...";
+                String displayTurfImage = "https://i.ibb.co/vJkFq7k/no-image.jpg";
 
-                // --- DETAILS GLASS PANE ---
-                _GlassPane(
+                // If data is ready, update variables
+                if (snapshot.connectionState == ConnectionState.done && snapshot.hasData && snapshot.data!.exists) {
+                  final turfData = snapshot.data!.data() as Map<String, dynamic>;
+
+                  // Correct keys based on your Firestore structure
+                  displayTurfName = turfData['turf_name'] ?? "Unknown Turf";
+
+                  if (turfData['images'] != null && (turfData['images'] as List).isNotEmpty) {
+                    displayTurfImage = turfData['images'][0];
+                  }
+                }
+
+                // Show loading spinner only if waiting
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator(color: Colors.greenAccent));
+                }
+
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 110, 20, 30),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Header
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              turfName,
-                              style: const TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                                height: 1.1,
-                              ),
+                      // --- IMAGE CARD ---
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.5),
+                              blurRadius: 15,
+                              offset: const Offset(0, 5),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: Image.network(
+                            displayTurfImage, // Uses fetched image
+                            height: 220,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Container(
+                                  height: 220,
+                                  color: Colors.white10,
+                                  child: const Center(child: CircularProgressIndicator()));
+                            },
+                            errorBuilder: (_, __, ___) => Container(
+                              height: 220,
+                              color: Colors.white10,
+                              child: const Icon(Icons.broken_image, color: Colors.white24, size: 50),
                             ),
                           ),
-                          _buildStatusChip(status),
-                        ],
-                      ),
-
-                      const SizedBox(height: 24),
-                      const Divider(color: Colors.white24),
-                      const SizedBox(height: 24),
-
-                      // Grid of Details
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _InfoItem(
-                              icon: Icons.calendar_today,
-                              label: "Date",
-                              value: formattedDate,
-                            ),
-                          ),
-                          Expanded(
-                            child: _InfoItem(
-                              icon: Icons.access_time,
-                              label: "Time Slot",
-                              value: slot,
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      // Price Row
-                      _InfoItem(
-                        icon: Icons.currency_rupee,
-                        label: "Total Price",
-                        value: "₹$price",
-                        isPrice: true,
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 30),
-
-                // --- CANCEL BUTTON ---
-                if (status != "cancelled")
-                  SizedBox(
-                    width: double.infinity,
-                    height: 55,
-                    child: ElevatedButton(
-                      onPressed: () => _cancelBooking(context),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.redAccent.withOpacity(0.9),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
                         ),
                       ),
-                      child: const Text(
-                        "Cancel Booking",
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
 
-                // If cancelled text
-                if (status == "cancelled")
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.red.withOpacity(0.3)),
-                    ),
-                    child: const Text(
-                      "This booking has been cancelled.",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.redAccent),
-                    ),
+                      const SizedBox(height: 24),
+
+                      // --- DETAILS GLASS PANE ---
+                      _GlassPane(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Header
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    displayTurfName, // Uses fetched name
+                                    style: const TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                      height: 1.1,
+                                    ),
+                                  ),
+                                ),
+                                _buildStatusChip(status),
+                              ],
+                            ),
+
+                            const SizedBox(height: 24),
+                            const Divider(color: Colors.white24),
+                            const SizedBox(height: 24),
+
+                            // Grid of Details
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _InfoItem(
+                                    icon: Icons.calendar_today,
+                                    label: "Date",
+                                    value: formattedDate,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: _InfoItem(
+                                    icon: Icons.access_time,
+                                    label: "Time Slot",
+                                    value: slot,
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 24),
+
+                            // Price Row
+                            _InfoItem(
+                              icon: Icons.currency_rupee,
+                              label: "Total Price",
+                              value: "₹$price",
+                              isPrice: true,
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 30),
+
+                      // --- CANCEL BUTTON ---
+                      if (status != "cancelled")
+                        SizedBox(
+                          width: double.infinity,
+                          height: 55,
+                          child: ElevatedButton(
+                            onPressed: () => _cancelBooking(context),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.redAccent.withOpacity(0.9),
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                            child: const Text(
+                              "Cancel Booking",
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+
+                      // If cancelled text
+                      if (status == "cancelled")
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.red.withOpacity(0.3)),
+                          ),
+                          child: const Text(
+                            "This booking has been cancelled.",
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.redAccent),
+                          ),
+                        ),
+                    ],
                   ),
-              ],
-            ),
+                );
+              }
           ),
         ],
       ),
@@ -210,7 +244,6 @@ class BookingDetailsScreen extends StatelessWidget {
   // --------------------- CANCEL BOOKING ---------------------
 
   void _cancelBooking(BuildContext context) async {
-    // Show Dark Theme Dialog
     final confirm = await showDialog(
       context: context,
       builder: (c) => AlertDialog(

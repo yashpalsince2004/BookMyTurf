@@ -117,7 +117,7 @@ class BookingHistoryScreen extends StatelessWidget {
 }
 
 // ---------------------------------------------
-// GLASS CARD COMPONENT
+// UPDATED CARD COMPONENT
 // ---------------------------------------------
 class _BookingCard extends StatelessWidget {
   final Map<String, dynamic> data;
@@ -127,12 +127,13 @@ class _BookingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final turfName = data["turfName"] ?? "Unknown Turf";
+    // 1. Get the turfId from the booking data to fetch the specific turf info
+    final turfId = data["turfId"];
     final slot = data["slot"] ?? "N/A";
     final date = data["date"];
     final status = data["status"] ?? "confirmed";
-    final turfImage = data["turfImage"] ?? "https://i.ibb.co/vJkFq7k/no-image.jpg";
 
+    // Format Date
     String formattedDate = "Unknown Date";
     if (date != null) {
       try {
@@ -146,7 +147,6 @@ class _BookingCard extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 16),
       child: _GlassPane(
         onTap: () {
-          // Navigate to details (Assuming you have this screen ready)
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -157,78 +157,113 @@ class _BookingCard extends StatelessWidget {
             ),
           );
         },
-        child: Row(
-          children: [
-            // ----- LEFT: TEXT INFO -----
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        // 2. Use FutureBuilder to fetch 'turf_name' and 'images' from the 'turfs' collection
+        child: FutureBuilder<DocumentSnapshot>(
+            future: FirebaseFirestore.instance.collection('turfs').doc(turfId).get(),
+            builder: (context, snapshot) {
+
+              // Default/Loading values
+              String displayTurfName = "Loading...";
+              String displayTurfImage = "https://i.ibb.co/vJkFq7k/no-image.jpg"; // Placeholder
+
+              if (snapshot.connectionState == ConnectionState.done && snapshot.hasData && snapshot.data!.exists) {
+                final turfData = snapshot.data!.data() as Map<String, dynamic>;
+
+                // --- KEY CHANGES BASED ON YOUR SCREENSHOT ---
+                displayTurfName = turfData['turf_name'] ?? "Unknown Turf";
+
+                if (turfData['images'] != null && (turfData['images'] as List).isNotEmpty) {
+                  displayTurfImage = turfData['images'][0]; // Get the first image
+                }
+              } else if (snapshot.hasError) {
+                displayTurfName = "Error loading turf";
+              }
+
+              return Row(
                 children: [
-                  Text(
-                    turfName,
-                    style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white),
-                  ),
-                  const SizedBox(height: 6),
+                  // ----- LEFT: TEXT INFO -----
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          displayTurfName, // Using the fetched name
+                          style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 6),
 
-                  // Row for Date & Time icons
-                  Row(
-                    children: [
-                      const Icon(Icons.calendar_today, size: 12, color: Colors.white54),
-                      const SizedBox(width: 4),
-                      Text(formattedDate,
-                          style: const TextStyle(fontSize: 13, color: Colors.white70)),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(Icons.access_time, size: 12, color: Colors.white54),
-                      const SizedBox(width: 4),
-                      Text(slot,
-                          style: const TextStyle(fontSize: 13, color: Colors.white70)),
-                    ],
+                        // Row for Date & Time icons
+                        Row(
+                          children: [
+                            const Icon(Icons.calendar_today, size: 12, color: Colors.white54),
+                            const SizedBox(width: 4),
+                            Text(formattedDate,
+                                style: const TextStyle(fontSize: 13, color: Colors.white70)),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            const Icon(Icons.access_time, size: 12, color: Colors.white54),
+                            const SizedBox(width: 4),
+                            Text(slot,
+                                style: const TextStyle(fontSize: 13, color: Colors.white70)),
+                          ],
+                        ),
+
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            _buildStatusChip(status),
+                            const Spacer(),
+                            const Text(
+                              "More details >",
+                              style: TextStyle(
+                                  color: Colors.greenAccent,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        )
+                      ],
+                    ),
                   ),
 
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      _buildStatusChip(status),
-                      const Spacer(),
-                      const Text(
-                        "More details >",
-                        style: TextStyle(
-                            color: Colors.greenAccent,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold),
+                  const SizedBox(width: 12),
+
+                  // ----- RIGHT: IMAGE -----
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.network(
+                      displayTurfImage, // Using the fetched image
+                      width: 80,
+                      height: 80,
+                      fit: BoxFit.cover,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Container(
+                          width: 80,
+                          height: 80,
+                          color: Colors.white10,
+                          child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                        );
+                      },
+                      errorBuilder: (_, __, ___) => Container(
+                        width: 80,
+                        height: 80,
+                        color: Colors.white10,
+                        child: const Icon(Icons.broken_image, color: Colors.white24),
                       ),
-                    ],
-                  )
+                    ),
+                  ),
                 ],
-              ),
-            ),
-
-            const SizedBox(width: 12),
-
-            // ----- RIGHT: IMAGE -----
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.network(
-                turfImage,
-                width: 80,
-                height: 80,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  width: 80,
-                  height: 80,
-                  color: Colors.white10,
-                  child: const Icon(Icons.broken_image, color: Colors.white24),
-                ),
-              ),
-            ),
-          ],
+              );
+            }
         ),
       ),
     );
@@ -267,7 +302,6 @@ class _BookingCard extends StatelessWidget {
     );
   }
 }
-
 // ---------------------------------------------------------------------
 // REUSABLE GLASS PANE (COPIED FROM HOME SCREEN)
 // ---------------------------------------------------------------------
