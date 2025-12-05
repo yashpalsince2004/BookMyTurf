@@ -8,6 +8,7 @@ class ConfirmBookingScreen extends StatefulWidget {
   final String turfName;
   final String turfImage;
   final String turfAddress;
+  final String turfOwnerId;
   final DateTime date;
   final List<String> selectedSlots;
   final Map<String, int> slotPrices;
@@ -19,6 +20,7 @@ class ConfirmBookingScreen extends StatefulWidget {
     required this.turfName,
     required this.turfImage,
     required this.turfAddress,
+    required this.turfOwnerId,
     required this.date,
     required this.selectedSlots,
     required this.slotPrices,
@@ -31,76 +33,74 @@ class ConfirmBookingScreen extends StatefulWidget {
 
 class _ConfirmBookingScreenState extends State<ConfirmBookingScreen> {
   bool _isLoading = false;
-  // 🔒 Payment is always UPI now
+  // ignore: unused_field
   final String _paymentMethod = "UPI";
+  bool _isFullPayment = true;
 
-  // Payment Option State
-  bool _isFullPayment = true; // Default to Full Payment
-
-  // Theme Colors
   final Color backgroundColor = const Color(0xFF121212);
   final Color cardColor = const Color(0xFF1E1E1E);
   final Color accentColor = const Color(0xFF00E676);
   final Color partialColor = const Color(0xFFFF9800);
 
+  // ✅ UPDATED FUNCTION: Creates 1 Single Merged Document
   Future<void> _processPaymentAndBook() async {
+    if (widget.selectedSlots.isEmpty) return;
+
     setState(() => _isLoading = true);
 
     final currentUser = FirebaseAuth.instance.currentUser;
     final firestore = FirebaseFirestore.instance;
-    final batch = firestore.batch();
-    String dateKey = DateFormat('yyyy-MM-dd').format(widget.date);
 
-    // Calculate amounts
+    // Date Format: DD/MM/YYYY
+    String slotDateFormatted = DateFormat('dd/MM/yyyy').format(widget.date);
+
+    // Calculate Financials
     int payableNow = _isFullPayment ? widget.totalPrice : (widget.totalPrice / 2).ceil();
-    int balanceAtVenue = widget.totalPrice - payableNow;
-    String paymentTypeStr = _isFullPayment ? "Full Payment" : "Partial Payment";
+    int balanceAmount = widget.totalPrice - payableNow;
+
+    // 1. Sort Slots (Ensure "6-7, 7-8" order)
+    List<String> sortedSlots = List.from(widget.selectedSlots)..sort();
+
+    // 2. Create Display String (e.g., "6:00 AM - 9:00 AM")
+    String startTime = sortedSlots.first.split('-')[0].trim();
+    String endTime = sortedSlots.last.split('-')[1].trim();
+    String displaySlotRange = "$startTime - $endTime";
 
     try {
-      await Future.delayed(const Duration(seconds: 2)); // Simulate UPI Payment
+      await Future.delayed(const Duration(seconds: 2)); // Simulate payment delay
 
-      for (String slotTime in widget.selectedSlots) {
-        int thisSlotPrice = widget.slotPrices[slotTime] ?? 0;
+      // 3. Prepare ONE Data Object (No Loop!)
+      Map<String, dynamic> bookingData = {
+        // --- KEY FIX: Save as List AND String ---
+        "slots": sortedSlots,           // List ["6:00 AM - 7:00 AM", "7:00 AM..."]
+        // "slot_display": displaySlotRange, // String "6:00 AM - 9:00 AM"
+        "slot": displaySlotRange,       // Legacy support
 
-        String docId = "${widget.turfId}_${dateKey}_${slotTime.replaceAll(' ', '')}";
-        DocumentReference docRef = firestore.collection("bookings").doc(docId);
+        // Turf & Owner Details
+        "turf_id": widget.turfId,
+        "turf_name": widget.turfName,
+        "owner_id": widget.turfOwnerId,
 
-        final snap = await docRef.get();
-        if (snap.exists) {
-          final data = snap.data() as Map<String, dynamic>;
-          if (data["status"] != "cancelled") {
-            throw Exception("Slot $slotTime was just taken! Please try again.");
-          }
-        }
+        // User Details
+        "user_id": currentUser?.uid,
+        "booked_by": "user",
+        "user_phone": currentUser?.phoneNumber ?? "Unknown",
+        "customer_phone": currentUser?.phoneNumber ?? "Unknown",
 
-        batch.set(
-          docRef,
-          {
-            "turfId": widget.turfId,
-            "turfName": widget.turfName,
-            "turfImage": widget.turfImage,
-            "turfAddress": widget.turfAddress,
-            "slot": slotTime,
-            "date": dateKey,
-            "price": thisSlotPrice,
-            "userId": currentUser?.uid,
-            "userName": currentUser?.displayName ?? currentUser?.phoneNumber ?? "Player",
-            "timestamp": FieldValue.serverTimestamp(),
-            "status": "confirmed",
+        // Financials (Aggregated)
+        "amount_total": widget.totalPrice,
+        "amount_paid": payableNow,
+        "amount_balance": balanceAmount,
+        "payment_method": "UPI",
 
-            // Payment Fields
-            "paymentMethod": _paymentMethod, // Always UPI
-            "paymentType": paymentTypeStr,
-            "totalAmount": widget.totalPrice,
-            "amountPaid": payableNow,
-            "balanceAmount": balanceAtVenue,
-            "paymentStatus": "advance_paid", // Since they always pay something now
-          },
-          SetOptions(merge: true),
-        );
-      }
+        // Meta Data
+        "slot_date": slotDateFormatted,
+        "timestamp": FieldValue.serverTimestamp(),
+        "status": "confirmed",
+      };
 
-      await batch.commit();
+      // 4. Write Single Document to Firestore
+      await firestore.collection("bookings").add(bookingData);
 
       if (!mounted) return;
 
@@ -138,7 +138,6 @@ class _ConfirmBookingScreenState extends State<ConfirmBookingScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. Turf Summary Card
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(12)),
@@ -165,7 +164,6 @@ class _ConfirmBookingScreenState extends State<ConfirmBookingScreen> {
 
             const SizedBox(height: 20),
 
-            // 2. Booking Details
             const Text("Booking Details", style: TextStyle(color: Colors.white54, fontSize: 14)),
             const SizedBox(height: 8),
             Container(
@@ -192,7 +190,6 @@ class _ConfirmBookingScreenState extends State<ConfirmBookingScreen> {
 
             const SizedBox(height: 20),
 
-            // 3. Payment Options (Full vs Partial)
             const Text("Choose Payment Option", style: TextStyle(color: Colors.white54, fontSize: 14)),
             const SizedBox(height: 8),
             Container(
@@ -208,7 +205,6 @@ class _ConfirmBookingScreenState extends State<ConfirmBookingScreen> {
                   const Divider(color: Colors.white10, height: 1),
                   _buildRadioOption(
                     title: "Partial Payment (50%)",
-                    // 🆕 Updated Text
                     subtitle: "Balance payable at venue 10 min before slot",
                     value: false,
                     price: (widget.totalPrice / 2).ceil(),
@@ -220,7 +216,6 @@ class _ConfirmBookingScreenState extends State<ConfirmBookingScreen> {
 
             const SizedBox(height: 20),
 
-            // 4. Payment Summary
             const Text("Payment Summary", style: TextStyle(color: Colors.white54, fontSize: 14)),
             const SizedBox(height: 8),
             Container(
@@ -234,7 +229,7 @@ class _ConfirmBookingScreenState extends State<ConfirmBookingScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text("Payable Now (UPI)", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      Text("Payable Now (UPI)", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                       Text("₹$payableAmount", style: TextStyle(color: accentColor, fontWeight: FontWeight.bold, fontSize: 18)),
                     ],
                   ),
@@ -260,7 +255,6 @@ class _ConfirmBookingScreenState extends State<ConfirmBookingScreen> {
 
             const SizedBox(height: 20),
 
-            // 5. Static Payment Method Info (Since it's only UPI)
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -287,7 +281,6 @@ class _ConfirmBookingScreenState extends State<ConfirmBookingScreen> {
         ),
       ),
 
-      // Bottom Pay Button
       bottomNavigationBar: Container(
         padding: const EdgeInsets.all(16),
         color: cardColor,
@@ -312,7 +305,6 @@ class _ConfirmBookingScreenState extends State<ConfirmBookingScreen> {
     );
   }
 
-  // Helper for Payment Options
   Widget _buildRadioOption({required String title, required String subtitle, required bool value, required int price, bool isPartial = false}) {
     bool isSelected = _isFullPayment == value;
     return GestureDetector(

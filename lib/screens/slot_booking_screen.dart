@@ -22,35 +22,29 @@ class SlotBookingScreen extends StatefulWidget {
 }
 
 class _SlotBookingScreenState extends State<SlotBookingScreen> {
-  // --- THEME COLORS ---
+  // Theme Colors
   final Color backgroundColor = const Color(0xFF121212);
   final Color cardColor = const Color(0xFF1E1E1E);
   final Color accentColor = const Color(0xFF00E676);
-  final Color bookedColor = const Color(0xFFFF5252);
+  // ✅ Changed to a light, semi-transparent red for a "glass tint" effect
+  final Color bookedColor = const Color(0x80EF5350);
   final Color weekendColor = const Color(0xFFFF9800);
   final Color calendarSelectedColor = const Color(0xFF4CAF50);
 
   List<TurfSlot> allSlots = [];
-
-  // Date State
   List<DateTime> dateList = [];
   DateTime _selectedDate = DateTime.now();
-
-  // Selection State
   List<String> selectedSlots = [];
   bool loading = true;
 
-  // --- DYNAMIC DATA ---
   int priceMorning = 0;
   int priceAfternoon = 0;
   int priceEvening = 0;
   int priceNight = 0;
-
   String openTimeStr = "06:00";
   String closeTimeStr = "23:00";
-
-  // Address Field
   String turfAddress = "Loading address...";
+  String turfOwnerId = "";
 
   @override
   void initState() {
@@ -64,7 +58,6 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
     dateList = List.generate(14, (index) => now.add(Duration(days: index)));
   }
 
-  // --- FETCH DATA ---
   Future<void> _fetchTurfData() async {
     try {
       DocumentSnapshot doc = await FirebaseFirestore.instance
@@ -76,22 +69,17 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
         Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
 
         setState(() {
-          // Fetch Prices
           priceMorning = int.tryParse(data['price_morning'].toString()) ?? 0;
           priceAfternoon = int.tryParse(data['price_afternoon'].toString()) ?? 0;
           priceEvening = int.tryParse(data['price_evening'].toString()) ?? 0;
           priceNight = int.tryParse(data['price_night'].toString()) ?? 0;
-
-          // Fetch Hours
           openTimeStr = data['open_time'] ?? "06:00";
           closeTimeStr = data['close_time'] ?? "23:00";
-
-          // Fetch Address
           turfAddress = data['address'] ?? "Location details not available";
+          turfOwnerId = data['ownerId'] ?? "";
 
           _generateSlots();
         });
-
         _listenToBookings();
       }
     } catch (e) {
@@ -100,72 +88,65 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
     }
   }
 
-  // --- SLOT GENERATOR ---
   void _generateSlots() {
     allSlots.clear();
-
     int openHour = int.parse(openTimeStr.split(":")[0]);
     int closeHour = int.parse(closeTimeStr.split(":")[0]);
-
-    if (closeHour <= openHour) {
-      closeHour += 24;
-    }
+    if (closeHour <= openHour) closeHour += 24;
 
     for (int i = openHour; i < closeHour; i++) {
       int currentHour = i % 24;
-
       TimeOfDay start = TimeOfDay(hour: currentHour, minute: 0);
       int nextHour = (currentHour + 1) % 24;
       TimeOfDay end = TimeOfDay(hour: nextHour, minute: 0);
-
       String timeString = "${_formatTime(start)} - ${_formatTime(end)}";
 
       int currentPrice = priceNight;
+      if (currentHour >= 6 && currentHour < 12) currentPrice = priceMorning;
+      else if (currentHour >= 12 && currentHour < 17) currentPrice = priceAfternoon;
+      else if (currentHour >= 17 && currentHour < 22) currentPrice = priceEvening;
 
-      if (currentHour >= 6 && currentHour < 12) {
-        currentPrice = priceMorning;
-      } else if (currentHour >= 12 && currentHour < 17) {
-        currentPrice = priceAfternoon;
-      } else if (currentHour >= 17 && currentHour < 22) {
-        currentPrice = priceEvening;
-      } else {
-        currentPrice = priceNight;
-      }
-
-      allSlots.add(
-        TurfSlot(
-          time: timeString,
-          isAvailable: true,
-          price: currentPrice,
-        ),
-      );
+      allSlots.add(TurfSlot(time: timeString, isAvailable: true, price: currentPrice));
     }
-
-    setState(() {
-      loading = false;
-    });
+    setState(() => loading = false);
   }
 
-  // --- FIRESTORE LISTENER ---
   void _listenToBookings() {
-    String dateKey = DateFormat('yyyy-MM-dd').format(_selectedDate);
+    // Ensure date format matches your DB (dd/MM/yyyy)
+    String dateKey = DateFormat('dd/MM/yyyy').format(_selectedDate);
 
     FirebaseFirestore.instance
         .collection("bookings")
-        .where("turfId", isEqualTo: widget.turfId)
-        .where("date", isEqualTo: dateKey)
+        .where("turf_id", isEqualTo: widget.turfId)
+        .where("slot_date", isEqualTo: dateKey)
         .snapshots()
         .listen((snapshot) {
-      final bookedTimes = snapshot.docs
-          .where((doc) => doc["status"] != "cancelled")
-          .map((doc) => doc["slot"].toString())
-          .toList();
+
+      final List<String> bookedTimes = [];
+
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        if (data["status"] == "cancelled") continue;
+
+        // 1. Check for the new List format (Merged Slots)
+        if (data['slots'] != null && data['slots'] is List) {
+          var list = List<String>.from(data['slots']);
+          bookedTimes.addAll(list);
+        }
+        // 2. Check for the old String format (Legacy/Single Slots)
+        else if (data['slot'] != null) {
+          bookedTimes.add(data['slot'].toString());
+        }
+      }
 
       if (mounted) {
         setState(() {
           final toRemove = <String>[];
           for (var slot in allSlots) {
+            // Mark as unavailable if found in bookings
             slot.isAvailable = !bookedTimes.contains(slot.time);
+
+            // If currently selected but now booked by someone else, remove selection
             if (!slot.isAvailable && selectedSlots.contains(slot.time)) {
               toRemove.add(slot.time);
             }
@@ -183,30 +164,21 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
     return "$hour:$minute $period";
   }
 
-  // --- UPDATED NAVIGATION LOGIC ---
   void _bookSlots() {
     if (selectedSlots.isEmpty) return;
-
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: const Text("Please sign in to book slots."), backgroundColor: bookedColor),
-      );
+    if (FirebaseAuth.instance.currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please sign in.")));
       return;
     }
 
-    // 1. Calculate Total Price & Prepare Price Map
     int total = 0;
     Map<String, int> slotPriceMap = {};
-
     for (String slotTime in selectedSlots) {
-      // Find the slot object from allSlots to get its specific price
       var slotObj = allSlots.firstWhere((s) => s.time == slotTime);
       total += slotObj.price;
       slotPriceMap[slotTime] = slotObj.price;
     }
 
-    // 2. Navigate to Confirm Screen
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -214,9 +186,10 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
           turfId: widget.turfId,
           turfName: widget.turfName,
           turfImage: widget.turfImage,
-          turfAddress: turfAddress, // This variable is already in your state
+          turfAddress: turfAddress,
+          turfOwnerId: turfOwnerId,
           date: _selectedDate,
-          selectedSlots: List.from(selectedSlots), // Send a copy of the list
+          selectedSlots: List.from(selectedSlots),
           slotPrices: slotPriceMap,
           totalPrice: total,
         ),
@@ -224,7 +197,6 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
     );
   }
 
-  // --- CATEGORIZE SLOTS ---
   Map<String, List<TurfSlot>> _categorizeSlots(List<TurfSlot> slots) {
     List<TurfSlot> morning = [];
     List<TurfSlot> afternoon = [];
@@ -240,25 +212,15 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
         if (isPm && hour != 12) hour += 12;
         if (!isPm && hour == 12) hour = 0;
 
-        if (hour >= 6 && hour < 12) {
-          morning.add(slot);
-        } else if (hour >= 12 && hour < 17) {
-          afternoon.add(slot);
-        } else if (hour >= 17 && hour < 22) {
-          evening.add(slot);
-        } else {
-          night.add(slot);
-        }
+        if (hour >= 6 && hour < 12) morning.add(slot);
+        else if (hour >= 12 && hour < 17) afternoon.add(slot);
+        else if (hour >= 17 && hour < 22) evening.add(slot);
+        else night.add(slot);
       } catch (e) {
         evening.add(slot);
       }
     }
-    return {
-      "Morning": morning,
-      "Afternoon": afternoon,
-      "Evening": evening,
-      "Night": night,
-    };
+    return { "Morning": morning, "Afternoon": afternoon, "Evening": evening, "Night": night };
   }
 
   int _calculateTotalSelectionPrice() {
@@ -281,8 +243,7 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
         backgroundColor: backgroundColor,
         iconTheme: const IconThemeData(color: Colors.white),
         elevation: 0,
-        title: Text(widget.turfName,
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Text(widget.turfName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
       body: loading
           ? Center(child: CircularProgressIndicator(color: accentColor))
@@ -295,7 +256,6 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 1. Turf Image (Gradient REMOVED)
                   Container(
                     width: double.infinity,
                     height: 200,
@@ -307,7 +267,6 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
                     ),
                   ),
 
-                  // 2. Address Section (Simple Row)
                   Container(
                     color: cardColor,
                     margin: const EdgeInsets.only(bottom: 10),
@@ -328,14 +287,11 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
                     ),
                   ),
 
-                  // 3. Date Selector Header
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    child: const Text("Select Date",
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+                    child: const Text("Select Date", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
                   ),
 
-                  // 4. Date Selector List
                   SizedBox(
                     height: 85,
                     child: ListView.builder(
@@ -348,10 +304,8 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
                         final isSelected = DateUtils.isSameDay(date, _selectedDate);
                         final isWeekend = date.weekday == DateTime.saturday || date.weekday == DateTime.sunday;
 
-                        Color bg = isSelected ? calendarSelectedColor :
-                        (isWeekend ? weekendColor.withOpacity(0.15) : cardColor);
-                        Color border = isSelected ? Colors.transparent :
-                        (isWeekend ? weekendColor.withOpacity(0.4) : Colors.white.withOpacity(0.1));
+                        Color bg = isSelected ? calendarSelectedColor : (isWeekend ? weekendColor.withOpacity(0.15) : cardColor);
+                        Color border = isSelected ? Colors.transparent : (isWeekend ? weekendColor.withOpacity(0.4) : Colors.white.withOpacity(0.1));
                         Color textC = isWeekend && !isSelected ? weekendColor : Colors.white;
                         Color subTextC = isWeekend && !isSelected ? weekendColor.withOpacity(0.7) : Colors.white54;
 
@@ -375,11 +329,9 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Text(DateFormat('EEE').format(date).toUpperCase(),
-                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: subTextC)),
+                                Text(DateFormat('EEE').format(date).toUpperCase(), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: subTextC)),
                                 const SizedBox(height: 6),
-                                Text("${date.day}",
-                                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textC)),
+                                Text("${date.day}", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textC)),
                               ],
                             ),
                           ),
@@ -390,7 +342,6 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
 
                   const SizedBox(height: 10),
 
-                  // 5. Scrollable Sections (Morning -> Night)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Column(
@@ -409,7 +360,6 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
         ],
       ),
 
-      // Floating Booking Bar
       bottomSheet: selectedSlots.isNotEmpty ? Container(
         color: backgroundColor,
         padding: const EdgeInsets.all(20),
@@ -426,17 +376,11 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  "Book ${selectedSlots.length} Slot(s)",
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black),
-                ),
+                Text("Book ${selectedSlots.length} Slot(s)", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black)),
                 const SizedBox(width: 10),
                 Container(width: 1, height: 16, color: Colors.black54),
                 const SizedBox(width: 10),
-                Text(
-                  "₹$totalSelectionPrice",
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black),
-                )
+                Text("₹$totalSelectionPrice", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black))
               ],
             ),
           ),
@@ -508,9 +452,9 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
             Color text = Colors.white;
 
             if (!isAvailable) {
-              bg = bookedColor.withOpacity(0.1);
-              border = bookedColor.withOpacity(0.3);
-              text = bookedColor.withOpacity(0.6);
+              bg = bookedColor;
+              border = bookedColor;
+              text = Colors.white70;
             } else if (isSelected) {
               bg = accentColor.withOpacity(0.2);
               border = accentColor;
@@ -521,10 +465,60 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
               onTap: isAvailable
                   ? () {
                 setState(() {
+                  // ⚡️ CONSECUTIVE SELECTION LOGIC ⚡️
+
+                  // 1. Find the master index of this slot in the full list
+                  int tappedIndex = allSlots.indexOf(slot);
+
                   if (selectedSlots.contains(slot.time)) {
-                    selectedSlots.remove(slot.time);
+                    // --- DESELECTION LOGIC ---
+                    // Get indices of all currently selected slots
+                    List<int> currentIndices = selectedSlots
+                        .map((t) => allSlots.indexWhere((s) => s.time == t))
+                        .toList()..sort();
+
+                    // Allow removal only if it's the FIRST or LAST slot in the chain
+                    if (tappedIndex == currentIndices.first || tappedIndex == currentIndices.last) {
+                      selectedSlots.remove(slot.time);
+                    } else {
+                      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text("Can't remove middle slot. Unselect from edges."),
+                            backgroundColor: Colors.orange,
+                            duration: Duration(seconds: 1),
+                          )
+                      );
+                    }
                   } else {
-                    selectedSlots.add(slot.time);
+                    // --- SELECTION LOGIC ---
+                    if (selectedSlots.isEmpty) {
+                      // First slot is always free to pick
+                      selectedSlots.add(slot.time);
+                    } else {
+                      // Get min and max indices of current selection
+                      List<int> currentIndices = selectedSlots
+                          .map((t) => allSlots.indexWhere((s) => s.time == t))
+                          .toList()..sort();
+
+                      int minIndex = currentIndices.first;
+                      int maxIndex = currentIndices.last;
+
+                      // Check if the tapped slot is exactly before First OR after Last
+                      if (tappedIndex == minIndex - 1 || tappedIndex == maxIndex + 1) {
+                        selectedSlots.add(slot.time);
+                      } else {
+                        // Invalid Selection (Gap)
+                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text("Please select back-to-back slots only."),
+                              backgroundColor: Colors.redAccent,
+                              duration: Duration(seconds: 2),
+                            )
+                        );
+                      }
+                    }
                   }
                 });
               }
@@ -544,6 +538,7 @@ class _SlotBookingScreenState extends State<SlotBookingScreen> {
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
                     decoration: !isAvailable ? TextDecoration.lineThrough : null,
+                    decorationColor: Colors.white70,
                   ),
                 ),
               ),
