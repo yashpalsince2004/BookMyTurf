@@ -2,8 +2,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import '../models/turf_slot.dart';
-import 'booking/confirm_booking_screen.dart';
+import '../../models/turf_slot.dart';
+import 'confirm_booking_screen.dart';
 
 class SlotBookingScreen extends StatefulWidget {
   final String turfId;

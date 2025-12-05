@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 // Check these imports match your project structure
-import 'package:bookmyturf/screens/home/booking_history_screen.dart';
+import 'package:bookmyturf/screens/booking/booking_history_screen.dart';
+import '../like_screen.dart';
 import 'account_settings_screen.dart';
-import 'home/likes_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -75,7 +75,7 @@ class ProfileScreen extends StatelessWidget {
         ProfileMenuTile(
           icon: Icons.favorite,
           title: "Saved Turfs",
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LikesScreen())),
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LikeScreen())),
         ),
         const ProfileMenuTile(icon: Icons.notifications, title: "Notifications"),
         const ProfileMenuTile(icon: Icons.support_agent, title: "Help & Support"),

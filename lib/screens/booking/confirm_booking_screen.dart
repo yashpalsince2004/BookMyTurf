@@ -42,7 +42,8 @@ class _ConfirmBookingScreenState extends State<ConfirmBookingScreen> {
   final Color accentColor = const Color(0xFF00E676);
   final Color partialColor = const Color(0xFFFF9800);
 
-  // ✅ UPDATED FUNCTION: Creates 1 Single Merged Document
+
+  // ✅ UPDATED FUNCTION: Now includes 'booking_id'
   Future<void> _processPaymentAndBook() async {
     if (widget.selectedSlots.isEmpty) return;
 
@@ -58,23 +59,27 @@ class _ConfirmBookingScreenState extends State<ConfirmBookingScreen> {
     int payableNow = _isFullPayment ? widget.totalPrice : (widget.totalPrice / 2).ceil();
     int balanceAmount = widget.totalPrice - payableNow;
 
-    // 1. Sort Slots (Ensure "6-7, 7-8" order)
+    // 1. Sort Slots
     List<String> sortedSlots = List.from(widget.selectedSlots)..sort();
 
-    // 2. Create Display String (e.g., "6:00 AM - 9:00 AM")
+    // 2. Create Display String
     String startTime = sortedSlots.first.split('-')[0].trim();
     String endTime = sortedSlots.last.split('-')[1].trim();
     String displaySlotRange = "$startTime - $endTime";
 
     try {
-      await Future.delayed(const Duration(seconds: 2)); // Simulate payment delay
+      await Future.delayed(const Duration(seconds: 2));
 
-      // 3. Prepare ONE Data Object (No Loop!)
+      // --- STEP 1: Generate the Reference First ---
+      DocumentReference newBookingRef = firestore.collection("bookings").doc();
+      String generatedBookingId = newBookingRef.id;
+
+      // 3. Prepare ONE Data Object
       Map<String, dynamic> bookingData = {
-        // --- KEY FIX: Save as List AND String ---
-        "slots": sortedSlots,           // List ["6:00 AM - 7:00 AM", "7:00 AM..."]
-        // "slot_display": displaySlotRange, // String "6:00 AM - 9:00 AM"
-        "slot": displaySlotRange,       // Legacy support
+        // ID & Slot Info
+        "booking_id": generatedBookingId,
+        "slots": sortedSlots,
+        "slot": displaySlotRange,
 
         // Turf & Owner Details
         "turf_id": widget.turfId,
@@ -84,9 +89,6 @@ class _ConfirmBookingScreenState extends State<ConfirmBookingScreen> {
         // User Details
         "user_id": currentUser?.uid,
         "booked_by": "user",
-        "user_phone": currentUser?.phoneNumber ?? "Unknown",
-        "customer_phone": currentUser?.phoneNumber ?? "Unknown",
-
         // Financials (Aggregated)
         "amount_total": widget.totalPrice,
         "amount_paid": payableNow,
@@ -99,8 +101,8 @@ class _ConfirmBookingScreenState extends State<ConfirmBookingScreen> {
         "status": "confirmed",
       };
 
-      // 4. Write Single Document to Firestore
-      await firestore.collection("bookings").add(bookingData);
+      // --- STEP 2: Use .set() to save with the generated ID ---
+      await newBookingRef.set(bookingData);
 
       if (!mounted) return;
 

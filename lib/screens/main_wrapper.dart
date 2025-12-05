@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:bookmyturf/widgets/floating_nav_bar.dart';
 import 'package:bookmyturf/screens/home/home_screen.dart';
-import 'package:bookmyturf/screens/home/booking_history_screen.dart';
-import 'package:bookmyturf/screens/home/likes_screen.dart';
-import 'profile_screen.dart';
+import 'package:bookmyturf/screens/booking/booking_history_screen.dart';
+import 'Profile/profile_screen.dart';
+import 'like_screen.dart';
 
 class MainWrapper extends StatefulWidget {
   const MainWrapper({super.key});
@@ -19,7 +19,7 @@ class _MainWrapperState extends State<MainWrapper> {
     HomeScreen(),
     // CalendarScreen(),
     BookingHistoryScreen(),
-    LikesScreen(),
+    LikeScreen(),
     ProfileScreen(),
   ];
 

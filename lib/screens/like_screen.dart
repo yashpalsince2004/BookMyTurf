@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:bookmyturf/widgets/glass_pane.dart';
 import 'package:bookmyturf/models/turf_models.dart';
-import 'package:bookmyturf/screens/slot_booking_screen.dart';
+import 'package:bookmyturf/screens/booking/slot_booking_screen.dart';
 
 class LikeScreen extends StatefulWidget {
   const LikeScreen({super.key});

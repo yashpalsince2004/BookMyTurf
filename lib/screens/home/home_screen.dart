@@ -11,9 +11,9 @@ import 'dart:async';
 import 'dart:math'; // Added for min() function
 import 'package:bookmyturf/widgets/glass_pane.dart';
 import 'package:bookmyturf/models/turf_models.dart';
-import '../city_picker_screen.dart';
+import 'city_picker_screen.dart';
 import '../like_screen.dart';
-import '../slot_booking_screen.dart';
+import '../booking/slot_booking_screen.dart';
 
 // ---------------------------------------------
 // HOME SCREEN
